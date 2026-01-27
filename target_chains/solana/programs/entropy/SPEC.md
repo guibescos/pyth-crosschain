@@ -53,15 +53,16 @@ PDA: `seeds = ["provider", provider_authority_pubkey]`
 
 The provider authority is the signer on register/update/withdraw.
 
-Fields (use zero-copy/POD layout; fixed-size preferred. If storing metadata/uri inline, use
-manual length-prefixed bytes but keep the outer struct POD/zero-copy, no Borsh):
+Fields (use zero-copy/POD layout; fixed-size):
 - `provider_authority: Pubkey` (redundant but explicit)
 - `fee_lamports: u64`
 - `accrued_fees_lamports: u64`
 - `original_commitment: [u8; 32]`
 - `original_commitment_sequence_number: u64`
-- `commitment_metadata: Vec<u8>` (optional)
-- `uri: Vec<u8>` (optional)
+- `commitment_metadata_len: u16`
+- `commitment_metadata: [u8; COMMITMENT_METADATA_LEN]`
+- `uri_len: u16`
+- `uri: [u8; URI_LEN]`
 - `end_sequence_number: u64`
 - `sequence_number: u64` (next sequence number to assign)
 - `current_commitment: [u8; 32]`
@@ -73,8 +74,8 @@ manual length-prefixed bytes but keep the outer struct POD/zero-copy, no Borsh):
 
 Notes:
 - Mirrors `EntropyStructsV2.ProviderInfo` and Ethereum registration semantics.
-- If a fixed-size account is desired, move `commitment_metadata` and `uri` into a separate
-  `ProviderMetadata` PDA and store their hashes or pointers in the provider account.
+- `commitment_metadata` and `uri` are fixed-size, zero-padded buffers. Use `*_len` to indicate
+  the valid prefix. Recommended constants: `COMMITMENT_METADATA_LEN = 64`, `URI_LEN = 256`.
 
 ### 2.3 Provider fee vault
 PDA: `seeds = ["provider_vault", provider_authority_pubkey]`
@@ -149,9 +150,11 @@ Accounts:
 Args:
 - `fee_lamports: u64`
 - `commitment: [u8; 32]`
-- `commitment_metadata: Vec<u8>`
+- `commitment_metadata_len: u16`
+- `commitment_metadata: [u8; COMMITMENT_METADATA_LEN]`
 - `chain_length: u64`
-- `uri: Vec<u8>`
+- `uri_len: u16`
+- `uri: [u8; URI_LEN]`
 
 Behavior:
 - Require `chain_length > 0`.
@@ -162,7 +165,8 @@ Behavior:
   - `current_commitment = commitment`
   - `current_commitment_sequence_number = sequence_number`
   - `end_sequence_number = sequence_number + chain_length`
-  - `commitment_metadata = ...`, `uri = ...`
+  - `commitment_metadata_len = ...`, `commitment_metadata = ...`
+  - `uri_len = ...`, `uri = ...`
   - increment `sequence_number` by 1
 - If provider already exists, update in-place (rotation).
 
@@ -296,7 +300,7 @@ Mirror EVM setters. Each requires provider authority or fee manager as in EVM.
 Instructions:
 - `set_provider_fee(new_fee_lamports)`
 - `set_provider_fee_as_fee_manager(provider_authority, new_fee_lamports)`
-- `set_provider_uri(new_uri)`
+- `set_provider_uri(new_uri_len, new_uri)`
 - `set_fee_manager(new_fee_manager)`
 - `set_max_num_hashes(new_max)`
 - `set_default_compute_unit_limit(new_limit)`
@@ -405,12 +409,13 @@ These can be program logs or a dedicated event account if needed by clients.
   the hash from the full account metas array supplied at request time.
 - Close request accounts on success to reclaim rent.
 - Keep instruction data small; define a compact instruction enum with fixed-size fields for
-  common paths and a variant for variable-length metadata.
+  common paths and reserve a variant only for truly variable-length inputs (e.g., callback
+  account metas).
 
 ## 10. Data layout sizing (guidance)
 
-Because of variable-length fields, prefer either:
-- Fixed-size allocations with max lengths (e.g., 128 bytes for metadata, 256 bytes for URI), or
-- A separate `ProviderMetadata` PDA with serialized `Vec<u8>` fields.
+Use fixed-size allocations with max lengths for provider metadata/URI and keep the constants
+stable for deterministic sizing. If you need larger values, use a separate `ProviderMetadata`
+PDA with fixed-size buffers plus `*_len` fields.
 
 Ensure the account sizes are deterministic for Mollusk tests.

@@ -34,7 +34,7 @@ Key differences driven by Solana:
 ### 2.1 Config (global state)
 PDA: `seeds = ["config"]`
 
-Fields (fixed-size; avoid Borsh, use manual byte layout for lower CU):
+Fields (fixed-size; use zero-copy/POD layout, no Borsh):
 - `admin: Pubkey`
 - `pyth_fee_lamports: u64`
 - `accrued_pyth_fees_lamports: u64`
@@ -53,8 +53,8 @@ PDA: `seeds = ["provider", provider_authority_pubkey]`
 
 The provider authority is the signer on register/update/withdraw.
 
-Fields (avoid Borsh; fixed-size preferred. If storing metadata/uri inline, use manual
-length-prefixed bytes to avoid Borsh):
+Fields (use zero-copy/POD layout; fixed-size preferred. If storing metadata/uri inline, use
+manual length-prefixed bytes but keep the outer struct POD/zero-copy, no Borsh):
 - `provider_authority: Pubkey` (redundant but explicit)
 - `fee_lamports: u64`
 - `accrued_fees_lamports: u64`
@@ -84,7 +84,7 @@ System account holding lamports that back `provider.accrued_fees_lamports`.
 ### 2.4 Request account
 PDA: `seeds = ["request", provider_authority_pubkey, sequence_number_le_bytes]`
 
-Fields (fixed-size; avoid Borsh, use manual byte layout for lower CU):
+Fields (fixed-size; use zero-copy/POD layout, no Borsh):
 - `provider: Pubkey`
 - `sequence_number: u64`
 - `num_hashes: u32`
@@ -396,8 +396,8 @@ These can be program logs or a dedicated event account if needed by clients.
 ## 9. Pinocchio implementation notes
 
 - Use `solana_program::keccak::hash` to match EVM keccak.
-- Avoid Borsh for state: use a fixed byte layout (POD/zero-copy or manual pack/unpack) to
-  minimize compute units.
+- Use zero-copy POD structs for state (fixed byte layout; no Borsh, no manual pack/unpack)
+  to minimize compute units.
 - Enforce PDA seeds as described above; reject accounts with wrong PDA or owner.
 - Validate signer/auth rules: provider authority for provider writes; admin for governance;
   requester for `reveal` (no callback).

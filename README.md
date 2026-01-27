@@ -93,7 +93,7 @@ tag. See the GitHub Releases page for existing tags and naming. The general proc
 2. Submit a PR with the changes and merge them in to main.
 3. Create a GitHub release that creates the appropriate tag on publish (see [Releases](https://github.com/pyth-network/pyth-crosschain/releases)).
 4. Publish the release to trigger the GitHub Actions workflow (e.g., publish to npm or build/push Docker images).
-   - Note that when publishing a public package, you should prune the auto-generated Github release notes to only include changes relevant to the release. Otherwise, the changelog will include commits from unrelated projects in the monorepo since the previous release.
+   - Note that when publishing a public package, you should prune the auto-generated GitHub release notes to only include changes relevant to the release. Otherwise, the changelog will include commits from unrelated projects in the monorepo since the previous release.
 
 If you have a javascript package that shouldn't be published, simply add `"private": "true"` to the `package.json` file
 and it will be excluded from the publishing workflow. If you are creating a new public javascript package, you should add
@@ -149,7 +149,7 @@ To quickly get started, from the root of this repo, you can run the following:
 
 1. `pnpm create-pyth-package`
 2. Answer the prompts
-3. Once the script is done, you will have your new webb app, library or CLI tool bootstrapped with all the current best practices.
+3. Once the script is done, you will have your new web app, library or CLI tool bootstrapped with all the current best practices.
 
 If you'd like to read more about the best practices, checkout this best practices doc:
 [🔗 Creating a new JavaScript / TypeScript Package](./doc/js-code-guidelines.md)

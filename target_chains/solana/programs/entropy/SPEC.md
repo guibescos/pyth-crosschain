@@ -28,13 +28,14 @@ Key differences driven by Solana:
   and optional account hash to bind the callback accounts.
 - "Gas limit" becomes a compute-unit limit hint (still stored for compatibility and fee calculation).
 - Blockhash use is implemented via Sysvar SlotHashes instead of EVM `blockhash`.
+- Hashing should use SHA-256 (Solana-native) rather than keccak.
 
 ## 2. Program accounts and PDAs
 
 ### 2.1 Config (global state)
 PDA: `seeds = ["config"]`
 
-Fields (Borsh, fixed-size):
+Fields (fixed-size; avoid Borsh for on-chain state):
 - `admin: Pubkey`
 - `pyth_fee_lamports: u64`
 - `accrued_pyth_fees_lamports: u64`
@@ -42,7 +43,6 @@ Fields (Borsh, fixed-size):
 - `proposed_admin: Pubkey` (zero pubkey if none)
 - `seed: [u8; 32]` (for PRNG used by requestV2 convenience methods)
 - `bump: u8`
-- `version: u8`
 
 Notes:
 - This replaces `EntropyState.State.admin`, `pythFeeInWei`, `accruedPythFeesInWei`, `defaultProvider`,
@@ -53,14 +53,14 @@ PDA: `seeds = ["provider", provider_authority_pubkey]`
 
 The provider authority is the signer on register/update/withdraw.
 
-Fields (Borsh; variable-size if storing metadata/uri inline):
+Fields (fixed-size preferred; avoid variable-length vectors in the core PDA):
 - `provider_authority: Pubkey` (redundant but explicit)
 - `fee_lamports: u64`
 - `accrued_fees_lamports: u64`
 - `original_commitment: [u8; 32]`
 - `original_commitment_sequence_number: u64`
-- `commitment_metadata: Vec<u8>` (optional)
-- `uri: Vec<u8>` (optional)
+- `commitment_metadata: [u8; METADATA_MAX]` + `commitment_metadata_len: u16` (optional)
+- `uri: [u8; URI_MAX]` + `uri_len: u16` (optional)
 - `end_sequence_number: u64`
 - `sequence_number: u64` (next sequence number to assign)
 - `current_commitment: [u8; 32]`
@@ -72,8 +72,9 @@ Fields (Borsh; variable-size if storing metadata/uri inline):
 
 Notes:
 - Mirrors `EntropyStructsV2.ProviderInfo` and Ethereum registration semantics.
-- If a fixed-size account is desired, move `commitment_metadata` and `uri` into a separate
-  `ProviderMetadata` PDA and store their hashes or pointers in the provider account.
+- If fixed-size inline buffers are not desirable, move `commitment_metadata` and `uri` into a separate
+  `ProviderMetadata` PDA (e.g., seeds `["provider_metadata", provider_authority]`) and store only a hash
+  or pointer in the provider account.
 
 ### 2.3 Provider fee vault
 PDA: `seeds = ["provider_vault", provider_authority_pubkey]`
@@ -87,9 +88,10 @@ Fields:
 - `provider: Pubkey`
 - `sequence_number: u64`
 - `num_hashes: u32`
-- `commitment: [u8; 32]` (keccak256(user_commitment || provider_commitment))
+- `commitment: [u8; 32]` (sha256(user_commitment || provider_commitment))
 - `request_slot: u64` (Solana slot at request time)
-- `requester: Pubkey`
+- `requester_program_id: Pubkey`
+- `payer: Pubkey` (payer for rent; refund on close)
 - `use_blockhash: bool`
 - `callback_status: u8` (see Status Constants)
 - `compute_unit_limit: u32` (stored as hint; fee calc uses this)
@@ -99,9 +101,10 @@ Fields:
 
 Notes:
 - Replaces `EntropyStructsV2.Request` + callback status.
-- The request account is created by the requester and closed on reveal; lamports returned to requester.
-- `callback_accounts_hash` is a keccak of the metas supplied at request time to bind
-  callback accounts. If not used, enforce only that the requester signs.
+- The request account is created by the payer and closed on reveal; lamports returned to the payer.
+- `requester_program_id` is the program that initiated the request (typically via CPI).
+- `callback_accounts_hash` is a sha256 of the metas supplied at request time to bind
+  callback accounts. If not used, enforce only that the payer signs on non-callback reveals.
 
 ### 2.5 Pyth fee vault
 PDA: `seeds = ["pyth_fee_vault"]`
@@ -130,7 +133,6 @@ Args:
 - `admin: Pubkey`
 - `pyth_fee_lamports: u64`
 - `default_provider: Pubkey`
-- `prefill_request_storage: bool` (no-op on Solana; kept for parity)
 
 Checks:
 - Admin and default provider are non-zero.
@@ -169,13 +171,14 @@ Behavior:
 Mirrors `request` in EVM.
 
 Accounts:
-- `[signer]` requester
-- `[writable]` requester (payer) system account
+- `[signer]` payer
+- `[writable]` payer system account
 - `[writable]` request PDA (init)
 - `[writable]` provider PDA
 - `[writable]` provider_vault PDA
 - `[writable]` config PDA
 - `[writable]` pyth_fee_vault PDA
+- `[readonly]` requester_program (program id that initiated the request)
 - `system_program`
 
 Args:
@@ -189,12 +192,14 @@ Behavior:
 - Ensure `sequence_number < end_sequence_number` else `OutOfRandomness`.
 - Compute `num_hashes = sequence_number - provider.current_commitment_sequence_number`.
 - If `max_num_hashes != 0` and `num_hashes > max_num_hashes`, error `LastRevealedTooOld`.
-- `commitment = keccak(user_commitment || provider.current_commitment)`.
-- Record `request_slot`, `requester`, `use_blockhash`.
+- `commitment = sha256(user_commitment || provider.current_commitment)`.
+- Record `request_slot`, `requester_program_id`, `payer`, `use_blockhash`.
 - `callback_status = CALLBACK_NOT_NECESSARY`, `callback_program_id = Pubkey::default()`.
 - Fee: `required_fee = provider_fee + config.pyth_fee_lamports` where provider_fee scales
   by `compute_unit_limit` when `default_compute_unit_limit > 0` (see Fee Calculation).
-- Transfer lamports from requester to provider_vault and pyth_fee_vault and bump accrued counters.
+- Transfer lamports from payer to provider_vault and pyth_fee_vault and bump accrued counters.
+- For non-callback requests, `requester_program_id` may be `Pubkey::default()` to indicate there is
+  no consuming program.
 
 ### 4.4 Request with callback (V2)
 Mirrors `requestV2` and `requestWithCallback` in EVM.
@@ -211,17 +216,19 @@ Args:
 
 Behavior:
 - For requestV2 convenience, generate `user_randomness` via PRNG seeded from config.seed,
-  current slot, recent blockhash, and requester. Store back into config.seed.
-- `user_commitment = keccak(user_randomness)`; `use_blockhash = false`.
+  current slot, recent blockhash, and payer. Store back into config.seed.
+- `user_commitment = sha256(user_randomness)`; `use_blockhash = false`.
 - `callback_status = CALLBACK_NOT_STARTED`.
 - Store `compute_unit_limit` (if 0, use provider default at reveal/fee calc).
 - Store `callback_program_id` and optionally `callback_accounts_hash`.
+- Set `requester_program_id` from the `requester_program` account (typically the same as
+  `callback_program_id`).
 
 ### 4.5 Reveal (no callback)
 Mirrors `reveal` in EVM.
 
 Accounts:
-- `[signer]` requester
+- `[signer]` payer
 - `[writable]` request PDA
 - `[writable]` provider PDA
 - `slot_hashes` sysvar (readonly)
@@ -236,12 +243,12 @@ Args:
 Behavior:
 - Ensure request exists and matches provider/sequence.
 - `callback_status` must be `CALLBACK_NOT_NECESSARY`.
-- `requester` must sign.
+- `payer` must sign.
 - Verify commitment and compute random number (see Section 6).
 - If `use_blockhash` true, load hash from `slot_hashes` using `request_slot`. If missing, error
   `BlockhashUnavailable`.
 - Update provider current commitment if sequence_number is newer.
-- Close request account (lamports to requester).
+- Close request account (lamports to payer).
 
 ### 4.6 Reveal with callback
 Mirrors `revealWithCallback` in EVM.
@@ -263,6 +270,8 @@ Args:
 Behavior:
 - `callback_status` must be `CALLBACK_NOT_STARTED` or `CALLBACK_FAILED`.
 - Verify commitment and compute random number.
+- Validate `callback_program_id` matches the `callback_program` account and
+  `requester_program_id` (if non-default).
 - If `callback_program_id` is non-zero, CPI into callback program with
   (sequence_number, provider, random_number). Recommended: define a Solana entropy
   callback interface for requesters.
@@ -341,25 +350,27 @@ Rules:
 
 Ethereum logic (see `getProviderFee`):
 - Provider charges `fee` for `defaultGasLimit`.
-- Requests with gas limit above default pay proportionally more.
+- Requests with gas limit above default pay proportionally more after rounding the gas limit up to
+  the nearest 10k.
 
 Solana mapping:
 - Replace gas limit with compute unit limit. `default_compute_unit_limit` behaves like EVM
   `defaultGasLimit`.
-- `rounded_limit = round_up_to_10k(compute_unit_limit)` (unit = 10k CU).
+- Round up to units of 10k compute units, and reject limits above
+  `MAX_COMPUTE_UNIT_LIMIT = u16::MAX * 10_000` (same bound as EVM).
 - If `default_compute_unit_limit > 0` and `rounded_limit > default`,
-  `additional = (rounded_limit - default) * fee / default`.
+  `additional = (rounded_limit - default) * fee / default`, then `provider_fee = fee + additional`.
 
 ## 6. Hashing and randomness
 
-- Use keccak256 to match Ethereum: `keccak(user_commitment || provider_commitment)` and
-  for `combine_random_values` = keccak(user || provider || blockhash).
+- Use sha256 for Solana: `sha256(user_commitment || provider_commitment)` and
+  for `combine_random_values` = sha256(user || provider || blockhash).
 - Provider commitment validation: hash `provider_contribution` forward `num_hashes`
-  times with keccak; must equal `current_commitment`.
+  times with sha256; must equal `current_commitment`.
 - `use_blockhash` uses Sysvar SlotHashes to retrieve the hash for `request_slot`.
   If not present, return `BlockhashUnavailable`.
 - PRNG for requestV2 convenience should mix `config.seed`, current slot, recent blockhash,
-  and requester pubkey.
+  and payer pubkey.
 
 ## 7. Errors (mapping from EntropyErrors)
 
@@ -394,10 +405,10 @@ These can be program logs or a dedicated event account if needed by clients.
 
 ## 9. Pinocchio implementation notes
 
-- Use `solana_program::keccak::hash` to match EVM keccak.
+- Use `solana_program::hash::hashv` (SHA-256) for all hashing.
 - Enforce PDA seeds as described above; reject accounts with wrong PDA or owner.
 - Validate signer/auth rules: provider authority for provider writes; admin for governance;
-  requester for `reveal` (no callback).
+- payer for `reveal` (no callback).
 - Store `callback_accounts_hash` if you need to bind the accounts used in reveal; compute
   the hash from the full account metas array supplied at request time.
 - Close request accounts on success to reclaim rent.
@@ -411,4 +422,3 @@ Because of variable-length fields, prefer either:
 - A separate `ProviderMetadata` PDA with serialized `Vec<u8>` fields.
 
 Ensure the account sizes are deterministic for Mollusk tests.
-

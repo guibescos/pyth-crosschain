@@ -21,6 +21,7 @@ services, SDKs, and tooling in one place. Major top-level areas include:
 
 - [Overview](#overview)
 - [Repository Layout](#repository-layout)
+  - [Layout map](#layout-map)
 - [Target Chains](#target-chains)
 - [Hermes](#hermes)
 - [Fortuna](#fortuna)
@@ -35,6 +36,22 @@ services, SDKs, and tooling in one place. Major top-level areas include:
 - [Audit / Feature Status](#audit--feature-status)
 
 ## Repository Layout
+
+### Layout map
+
+```text
+.
+|-- apps/             # Hermes, Fortuna, and other user-facing services
+|-- contract_manager/ # Cross-chain contract management tooling
+|-- governance/       # Governance programs, config, and tooling
+|-- packages/         # Shared JS/TS SDKs and libraries
+|-- price_service/    # Core price service APIs and clients
+|-- pythnet/          # Pythnet programs, configs, and ops tooling
+|-- scripts/          # Repo automation and release helpers
+`-- target_chains/    # Chain-specific contracts and SDKs
+```
+
+Top-level directories:
 
 - [apps](./apps/): User-facing services and applications such as Hermes and
   Fortuna, plus related runtime configuration.

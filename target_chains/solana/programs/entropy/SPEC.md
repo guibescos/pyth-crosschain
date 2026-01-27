@@ -129,7 +129,6 @@ Args:
 - `admin: Pubkey`
 - `pyth_fee_lamports: u64`
 - `default_provider: Pubkey`
-- `prefill_request_storage: bool` (no-op on Solana; kept for parity)
 
 Checks:
 - Admin and default provider are non-zero.

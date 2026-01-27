@@ -42,7 +42,6 @@ Fields (fixed-size; use zero-copy/POD layout, no Borsh):
 - `proposed_admin: Pubkey` (zero pubkey if none)
 - `seed: [u8; 32]` (for PRNG used by requestV2 convenience methods)
 - `bump: u8`
-- `version: u8`
 
 Notes:
 - This replaces `EntropyState.State.admin`, `pythFeeInWei`, `accruedPythFeesInWei`, `defaultProvider`,
@@ -89,7 +88,7 @@ Fields (fixed-size; use zero-copy/POD layout, no Borsh):
 - `provider: Pubkey`
 - `sequence_number: u64`
 - `num_hashes: u32`
-- `commitment: [u8; 32]` (keccak256(user_commitment || provider_commitment))
+- `commitment: [u8; 32]` (sha256(user_commitment || provider_commitment))
 - `request_slot: u64` (Solana slot at request time)
 - `requester: Pubkey`
 - `use_blockhash: bool`
@@ -102,7 +101,7 @@ Fields (fixed-size; use zero-copy/POD layout, no Borsh):
 Notes:
 - Replaces `EntropyStructsV2.Request` + callback status.
 - The request account is created by the requester and closed on reveal; lamports returned to requester.
-- `callback_accounts_hash` is a keccak of the metas supplied at request time to bind
+- `callback_accounts_hash` is a sha256 of the metas supplied at request time to bind
   callback accounts. If not used, enforce only that the requester signs.
 
 ### 2.5 Pyth fee vault
@@ -132,7 +131,6 @@ Args:
 - `admin: Pubkey`
 - `pyth_fee_lamports: u64`
 - `default_provider: Pubkey`
-- `prefill_request_storage: bool` (no-op on Solana; kept for parity)
 
 Checks:
 - Admin and default provider are non-zero.
@@ -194,7 +192,7 @@ Behavior:
 - Ensure `sequence_number < end_sequence_number` else `OutOfRandomness`.
 - Compute `num_hashes = sequence_number - provider.current_commitment_sequence_number`.
 - If `max_num_hashes != 0` and `num_hashes > max_num_hashes`, error `LastRevealedTooOld`.
-- `commitment = keccak(user_commitment || provider.current_commitment)`.
+- `commitment = sha256(user_commitment || provider.current_commitment)`.
 - Record `request_slot`, `requester`, `use_blockhash`.
 - `callback_status = CALLBACK_NOT_NECESSARY`, `callback_program_id = Pubkey::default()`.
 - Fee: `required_fee = provider_fee + config.pyth_fee_lamports` where provider_fee scales
@@ -217,7 +215,7 @@ Args:
 Behavior:
 - For requestV2 convenience, generate `user_randomness` via PRNG seeded from config.seed,
   current slot, recent blockhash, and requester. Store back into config.seed.
-- `user_commitment = keccak(user_randomness)`; `use_blockhash = false`.
+- `user_commitment = sha256(user_randomness)`; `use_blockhash = false`.
 - `callback_status = CALLBACK_NOT_STARTED`.
 - Store `compute_unit_limit` (if 0, use provider default at reveal/fee calc).
 - Store `callback_program_id` and optionally `callback_accounts_hash`.
@@ -357,10 +355,10 @@ Solana mapping:
 
 ## 6. Hashing and randomness
 
-- Use keccak256 to match Ethereum: `keccak(user_commitment || provider_commitment)` and
-  for `combine_random_values` = keccak(user || provider || blockhash).
+- Use sha256: `sha256(user_commitment || provider_commitment)` and
+  for `combine_random_values` = sha256(user || provider || blockhash).
 - Provider commitment validation: hash `provider_contribution` forward `num_hashes`
-  times with keccak; must equal `current_commitment`.
+  times with sha256; must equal `current_commitment`.
 - `use_blockhash` uses Sysvar SlotHashes to retrieve the hash for `request_slot`.
   If not present, return `BlockhashUnavailable`.
 - PRNG for requestV2 convenience should mix `config.seed`, current slot, recent blockhash,
@@ -399,9 +397,9 @@ These can be program logs or a dedicated event account if needed by clients.
 
 ## 9. Pinocchio implementation notes
 
-- Use `solana_program::keccak::hash` to match EVM keccak.
 - Use zero-copy POD structs for state (fixed byte layout; no Borsh, no manual pack/unpack)
   to minimize compute units.
+- Use `solana_program::hash::hash` for sha256.
 - Enforce PDA seeds as described above; reject accounts with wrong PDA or owner.
 - Validate signer/auth rules: provider authority for provider writes; admin for governance;
   requester for `reveal` (no callback).

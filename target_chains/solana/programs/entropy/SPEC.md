@@ -130,7 +130,6 @@ Args:
 - `admin: Pubkey`
 - `pyth_fee_lamports: u64`
 - `default_provider: Pubkey`
-- `prefill_request_storage: bool` (no-op on Solana; kept for parity)
 
 Checks:
 - Admin and default provider are non-zero.
@@ -411,4 +410,3 @@ Because of variable-length fields, prefer either:
 - A separate `ProviderMetadata` PDA with serialized `Vec<u8>` fields.
 
 Ensure the account sizes are deterministic for Mollusk tests.
-

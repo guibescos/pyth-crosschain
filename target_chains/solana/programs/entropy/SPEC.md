@@ -42,7 +42,6 @@ Fields (Borsh, fixed-size):
 - `proposed_admin: Pubkey` (zero pubkey if none)
 - `seed: [u8; 32]` (for PRNG used by requestV2 convenience methods)
 - `bump: u8`
-- `version: u8`
 
 Notes:
 - This replaces `EntropyState.State.admin`, `pythFeeInWei`, `accruedPythFeesInWei`, `defaultProvider`,
@@ -411,4 +410,3 @@ Because of variable-length fields, prefer either:
 - A separate `ProviderMetadata` PDA with serialized `Vec<u8>` fields.
 
 Ensure the account sizes are deterministic for Mollusk tests.
-

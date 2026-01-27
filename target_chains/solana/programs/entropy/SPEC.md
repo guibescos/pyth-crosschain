@@ -34,7 +34,7 @@ Key differences driven by Solana:
 ### 2.1 Config (global state)
 PDA: `seeds = ["config"]`
 
-Fields (Borsh, fixed-size):
+Fields (fixed-size; avoid Borsh, use manual byte layout for lower CU):
 - `admin: Pubkey`
 - `pyth_fee_lamports: u64`
 - `accrued_pyth_fees_lamports: u64`
@@ -53,7 +53,8 @@ PDA: `seeds = ["provider", provider_authority_pubkey]`
 
 The provider authority is the signer on register/update/withdraw.
 
-Fields (Borsh; variable-size if storing metadata/uri inline):
+Fields (avoid Borsh; fixed-size preferred. If storing metadata/uri inline, use manual
+length-prefixed bytes to avoid Borsh):
 - `provider_authority: Pubkey` (redundant but explicit)
 - `fee_lamports: u64`
 - `accrued_fees_lamports: u64`
@@ -83,7 +84,7 @@ System account holding lamports that back `provider.accrued_fees_lamports`.
 ### 2.4 Request account
 PDA: `seeds = ["request", provider_authority_pubkey, sequence_number_le_bytes]`
 
-Fields:
+Fields (fixed-size; avoid Borsh, use manual byte layout for lower CU):
 - `provider: Pubkey`
 - `sequence_number: u64`
 - `num_hashes: u32`
@@ -395,6 +396,8 @@ These can be program logs or a dedicated event account if needed by clients.
 ## 9. Pinocchio implementation notes
 
 - Use `solana_program::keccak::hash` to match EVM keccak.
+- Avoid Borsh for state: use a fixed byte layout (POD/zero-copy or manual pack/unpack) to
+  minimize compute units.
 - Enforce PDA seeds as described above; reject accounts with wrong PDA or owner.
 - Validate signer/auth rules: provider authority for provider writes; admin for governance;
   requester for `reveal` (no callback).
@@ -411,4 +414,3 @@ Because of variable-length fields, prefer either:
 - A separate `ProviderMetadata` PDA with serialized `Vec<u8>` fields.
 
 Ensure the account sizes are deterministic for Mollusk tests.
-

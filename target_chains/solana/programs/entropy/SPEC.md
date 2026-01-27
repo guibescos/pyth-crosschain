@@ -24,8 +24,8 @@ vaults.
 Key differences driven by Solana:
 - Storage is explicit via PDAs instead of EVM mappings/arrays.
 - Fees are held in PDA-owned vault accounts and transferred via system instructions.
-- Callbacks are CPIs to the requester program (if provided). The request stores the callback program id
-  and optional account hash to bind the callback accounts.
+- Callbacks are CPIs to the requester program (if provided). The request may store an optional account
+  hash to bind the callback accounts, but does not store the callback program id.
 - "Gas limit" becomes a compute-unit limit hint (still stored for compatibility and fee calculation).
 - Blockhash use is implemented via Sysvar SlotHashes instead of EVM `blockhash`.
 
@@ -89,11 +89,10 @@ Fields:
 - `num_hashes: u32`
 - `commitment: [u8; 32]` (keccak256(user_commitment || provider_commitment))
 - `request_slot: u64` (Solana slot at request time)
-- `requester: Pubkey`
+- `requester: Pubkey` (requester program id)
 - `use_blockhash: bool`
 - `callback_status: u8` (see Status Constants)
 - `compute_unit_limit: u32` (stored as hint; fee calc uses this)
-- `callback_program_id: Pubkey` (zero pubkey = no callback)
 - `callback_accounts_hash: [u8; 32]` (optional, zero if unused)
 - `bump: u8`
 
@@ -101,7 +100,7 @@ Notes:
 - Replaces `EntropyStructsV2.Request` + callback status.
 - The request account is created by the requester and closed on reveal; lamports returned to requester.
 - `callback_accounts_hash` is a keccak of the metas supplied at request time to bind
-  callback accounts. If not used, enforce only that the requester signs.
+  callback accounts. If not used, enforce only that the requester PDA signs.
 
 ### 2.5 Pyth fee vault
 PDA: `seeds = ["pyth_fee_vault"]`
@@ -169,8 +168,9 @@ Behavior:
 Mirrors `request` in EVM.
 
 Accounts:
-- `[signer]` requester
-- `[writable]` requester (payer) system account
+- `[signer]` payer
+- `[writable]` payer system account
+- `[signer]` requester PDA (seeds = ["entropy_requester", requester_program_id])
 - `[writable]` request PDA (init)
 - `[writable]` provider PDA
 - `[writable]` provider_vault PDA
@@ -191,10 +191,10 @@ Behavior:
 - If `max_num_hashes != 0` and `num_hashes > max_num_hashes`, error `LastRevealedTooOld`.
 - `commitment = keccak(user_commitment || provider.current_commitment)`.
 - Record `request_slot`, `requester`, `use_blockhash`.
-- `callback_status = CALLBACK_NOT_NECESSARY`, `callback_program_id = Pubkey::default()`.
+- `callback_status = CALLBACK_NOT_NECESSARY`.
 - Fee: `required_fee = provider_fee + config.pyth_fee_lamports` where provider_fee scales
   by `compute_unit_limit` when `default_compute_unit_limit > 0` (see Fee Calculation).
-- Transfer lamports from requester to provider_vault and pyth_fee_vault and bump accrued counters.
+- Transfer lamports from payer to provider_vault and pyth_fee_vault and bump accrued counters.
 
 ### 4.4 Request with callback (V2)
 Mirrors `requestV2` and `requestWithCallback` in EVM.
@@ -215,13 +215,14 @@ Behavior:
 - `user_commitment = keccak(user_randomness)`; `use_blockhash = false`.
 - `callback_status = CALLBACK_NOT_STARTED`.
 - Store `compute_unit_limit` (if 0, use provider default at reveal/fee calc).
-- Store `callback_program_id` and optionally `callback_accounts_hash`.
+- Optionally store `callback_accounts_hash`. The callback program id is provided in the instruction
+  accounts and is not stored in the request.
 
 ### 4.5 Reveal (no callback)
 Mirrors `reveal` in EVM.
 
 Accounts:
-- `[signer]` requester
+- `[signer]` requester PDA (seeds = ["entropy_requester", requester_program_id])
 - `[writable]` request PDA
 - `[writable]` provider PDA
 - `slot_hashes` sysvar (readonly)
@@ -236,7 +237,7 @@ Args:
 Behavior:
 - Ensure request exists and matches provider/sequence.
 - `callback_status` must be `CALLBACK_NOT_NECESSARY`.
-- `requester` must sign.
+- The requester PDA must sign; the requester program id is used to derive the PDA.
 - Verify commitment and compute random number (see Section 6).
 - If `use_blockhash` true, load hash from `slot_hashes` using `request_slot`. If missing, error
   `BlockhashUnavailable`.
@@ -263,9 +264,8 @@ Args:
 Behavior:
 - `callback_status` must be `CALLBACK_NOT_STARTED` or `CALLBACK_FAILED`.
 - Verify commitment and compute random number.
-- If `callback_program_id` is non-zero, CPI into callback program with
-  (sequence_number, provider, random_number). Recommended: define a Solana entropy
-  callback interface for requesters.
+- CPI into callback program with (sequence_number, provider, random_number). Recommended: define a
+  Solana entropy callback interface for requesters.
 - If CPI fails and status was NOT_STARTED, mark as CALLBACK_FAILED.
 - If CPI succeeds, close request account.
 
@@ -397,7 +397,7 @@ These can be program logs or a dedicated event account if needed by clients.
 - Use `solana_program::keccak::hash` to match EVM keccak.
 - Enforce PDA seeds as described above; reject accounts with wrong PDA or owner.
 - Validate signer/auth rules: provider authority for provider writes; admin for governance;
-  requester for `reveal` (no callback).
+- requester PDA for `reveal` (no callback) and request creation; payer signs and funds any fees.
 - Store `callback_accounts_hash` if you need to bind the accounts used in reveal; compute
   the hash from the full account metas array supplied at request time.
 - Close request accounts on success to reclaim rent.
@@ -411,4 +411,3 @@ Because of variable-length fields, prefer either:
 - A separate `ProviderMetadata` PDA with serialized `Vec<u8>` fields.
 
 Ensure the account sizes are deterministic for Mollusk tests.
-

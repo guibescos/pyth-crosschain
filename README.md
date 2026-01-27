@@ -11,12 +11,13 @@ Within this monorepo you will find the following subprojects:
 - [Hermes](#hermes)
 - [Fortuna](#fortuna)
 - [Local Development](#local-development)
-  - [Setup](#setup)
+  - [Quick start](#quick-start)
+  - [Toolchain](#toolchain)
+  - [Common commands](#common-commands)
+  - [Rust services](#rust-services)
   - [Pull requests](#pull-requests)
   - [Releases](#releases)
   - [Typescript Monorepo](#typescript-monorepo)
-    - [Setting up](#setting-up)
-    - [Common tasks](#common-tasks)
     - [Building a new web app, JS / TS library or CLI tool](#building-a-new-web-app-js--ts-library-or-cli-tool)
 - [Audit / Feature Status](#audit--feature-status)
 
@@ -52,19 +53,54 @@ Fortuna is an off-chain service which can be used by [Entropy](https://pyth.netw
 
 ## Local Development
 
-### Setup
+### Quick start
 
-Please install the following tools in order to work in this repository:
+1. Install the toolchain below (Node/pnpm, plus chain-specific tools if needed).
+2. Ensure your Node version matches `.nvmrc` (currently `v24.0.0`) using your preferred manager:
+   - `nvm use`
+   - `mise x -- node --version` (or `mise x -- pnpm <command>` for any pnpm command)
+   - `nix develop` (if you use nix)
+3. Enable the pnpm version from `package.json` (`pnpm@10.28.0`) via Corepack:
+   - `corepack enable`
+   - `corepack prepare pnpm@10.28.0 --activate`
+4. Install dependencies:
+   - `pnpm install`
 
-- [NVM](https://github.com/nvm-sh/nvm?tab=readme-ov-file#installing-and-updating) to manage your node version, then run `nvm use 22` to ensure you are using node version 22.
-  - Optionally, you can also use [mise](https://mise.jdx.dev/). If you install `mise`, you can run all of your commands like the following: `mise x -- pnpm <SOME_COMMAND>`, which will ensure you are running your commands while using the correct tool versions for this repository.
-- [Foundry](https://book.getfoundry.sh/getting-started/installation) in order to use `forge` for Ethereum contract development
-- [Solana CLI](https://solana.com/docs/intro/installation) for working with Solana programs.
+### Toolchain
+
+Keep the tool list concise and only install what you need for the areas you work on:
+
+- [Node.js](https://nodejs.org/en) — match `.nvmrc` (`v24.0.0`). Use [nvm](https://github.com/nvm-sh/nvm) or [mise](https://mise.jdx.dev/), or enter a nix shell with `nix develop` (pair with `direnv allow` if you use direnv).
+- [pnpm](https://pnpm.io/) — match `package.json` (`pnpm@10.28.0`) via [Corepack](https://nodejs.org/api/corepack.html).
+- [Foundry](https://book.getfoundry.sh/getting-started/installation) for Ethereum contract development (`forge`).
+- [Solana CLI](https://solana.com/docs/intro/installation) for Solana programs.
   - After installing, please run `solana keygen new` to generate a local private key.
-- [Anchor](https://www.anchor-lang.com/docs/installation) for developing Solana programs.
+- [Anchor](https://www.anchor-lang.com/docs/installation) for Solana program development.
 - [Pre-commit](https://pre-commit.com/) is used to automatically format and lint the repository.
   - After installing, please run `pre-commit install` in the root of the repo to configure the checks to run on each git commit.
-- [Rust](https://www.rust-lang.org/tools/install)
+- [Rust](https://www.rust-lang.org/tools/install) for Rust services and SDKs.
+
+### Common commands
+
+All JS/TS packages live in a turborepo. From the repo root:
+
+- `pnpm turbo start:dev`: Start dev servers in parallel.
+- `pnpm turbo test`: Run unit/integration tests, linting, and format checks across packages.
+- `pnpm turbo fix`: Auto-fix and format where possible.
+- `pnpm turbo start:prod`: Build and run production servers.
+
+You can pass any `turbo run` option after `--`, for example:
+
+```
+pnpm turbo test -- --concurrency 2
+```
+
+### Rust services
+
+Some services and SDKs are Rust-based. Typical commands from the relevant crate directory:
+
+- `cargo build`
+- `cargo test`
 
 ### Pull requests
 
@@ -101,39 +137,6 @@ the following config option to `package.json`:
 
 All of the typescript / javascript packages in this repository are part of a
 [turborepo](https://turbo.build/repo/docs) monorepo.
-
-#### Setting up
-
-If you use nix and direnv, just cd to the project directory and `direnv allow`.
-
-If you use nix but not direnv, just cd to the project directory and enter a nix
-development shell with `nix develop`.
-
-If you don't use nix at all, then install the required system packages:
-
-- [Node.js](https://nodejs.org/en) -- match the version to `.nvmrc`; you can use
-  [nvm](https://github.com/nvm-sh/nvm) to manage your Node.js version.
-- [pnpm](https://pnpm.io/) -- match the version to the version specified in
-  `package.json`; you can experiment with
-  [corepack](https://nodejs.org/api/corepack.html) to manage your pnpm version
-  for you.
-
-#### Common tasks
-
-The following tasks are the most common ways to interact with the monorepo.
-Thanks to [turborepo](https://turbo.build/repo/docs), these tasks will
-coordinate building any needed dependencies, and task execution will be cached
-and will only re-run as necessary. For any of the following tasks, you can pass
-[any valid `turbo run` option](https://turbo.build/repo/docs/reference/run)
-after `--`, for instance you could run `pnpm test -- --concurrency 2`.
-
-- `pnpm turbo test`: Run all unit tests, integration tests, linting, and format
-  checks, as well as whatever other code checks any packages support.
-- `pnpm turbo fix`: Run auto fixes, including reformatting code and auto-fixing
-  lint rules where possible.
-- `pnpm turbo start:dev`: Start all development servers in parallel.
-- `pnpm turbo start:prod`: Run production builds and start production mode
-  servers in parallel.
 
 #### Building a new web app, JS / TS library or CLI tool
 

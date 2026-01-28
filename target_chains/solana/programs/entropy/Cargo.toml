@@ -14,5 +14,5 @@ no-entrypoint = []
 
 [dependencies]
 bytemuck = { version = "1.13.1", features = ["derive"] }
-solana-program = "2.3.0"
+solana-program = "3.0.0"
 thiserror = "1.0.50"

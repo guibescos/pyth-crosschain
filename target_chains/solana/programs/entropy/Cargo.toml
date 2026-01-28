@@ -1,0 +1,18 @@
+[package]
+name = "entropy"
+version = "0.1.0"
+edition = "2021"
+description = "Entropy Solana program"
+license = "Apache-2.0"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+
+[features]
+default = []
+no-entrypoint = []
+
+[dependencies]
+bytemuck = { version = "1.13.1", features = ["derive"] }
+solana-program = "1.16.20"
+thiserror = "1.0.50"

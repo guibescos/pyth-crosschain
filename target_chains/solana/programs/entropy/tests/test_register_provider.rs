@@ -183,7 +183,6 @@ async fn test_register_provider_happy_path() {
     assert_eq!(provider.discriminator, provider_discriminator());
     assert_eq!(provider.provider_authority, payer.pubkey().to_bytes());
     assert_eq!(provider.fee_lamports, 42);
-    assert_eq!(provider.accrued_fees_lamports, 0);
     assert_eq!(provider.original_commitment, commitment);
     assert_eq!(provider.current_commitment, commitment);
     assert_eq!(provider.original_commitment_sequence_number, 0);
@@ -296,11 +295,6 @@ async fn test_register_provider_rotation_updates_commitment_and_sequence() {
     );
     assert_eq!(provider.original_commitment, second_commitment);
     assert_eq!(provider.current_commitment, second_commitment);
-    assert_eq!(
-        provider.accrued_fees_lamports,
-        provider_before_data.accrued_fees_lamports
-    );
-
     let vault_after = banks_client
         .get_account(provider_vault)
         .await

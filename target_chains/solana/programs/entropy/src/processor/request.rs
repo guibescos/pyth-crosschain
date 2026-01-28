@@ -147,15 +147,6 @@ pub fn process_request(program_id: &Pubkey, accounts: &[AccountInfo], data: &[u8
         )?;
     }
 
-    provider.accrued_fees_lamports = provider
-        .accrued_fees_lamports
-        .checked_add(provider_fee)
-        .ok_or(ProgramError::InvalidArgument)?;
-    config.accrued_pyth_fees_lamports = config
-        .accrued_pyth_fees_lamports
-        .checked_add(config.pyth_fee_lamports)
-        .ok_or(ProgramError::InvalidArgument)?;
-
     provider.sequence_number = provider
         .sequence_number
         .checked_add(1)

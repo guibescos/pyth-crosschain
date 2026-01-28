@@ -16,15 +16,24 @@ pub enum EntropyInstruction {
     Governance = 9,
 }
 
+pub const INSTRUCTION_DISCRIMINATOR_LEN: usize = 8;
+
 impl EntropyInstruction {
+    pub fn discriminator(self) -> [u8; 8] {
+        (self as u64).to_le_bytes()
+    }
+
     pub fn parse(
         input: &[u8],
     ) -> Result<(EntropyInstruction, &[u8]), solana_program::program_error::ProgramError> {
-        if input.is_empty() {
+        if input.len() < INSTRUCTION_DISCRIMINATOR_LEN {
             return Err(solana_program::program_error::ProgramError::InvalidInstructionData);
         }
-        let payload = &input[1..];
-        let instruction = match input[0] {
+        let mut discriminator_bytes = [0u8; INSTRUCTION_DISCRIMINATOR_LEN];
+        discriminator_bytes.copy_from_slice(&input[..INSTRUCTION_DISCRIMINATOR_LEN]);
+        let discriminator = u64::from_le_bytes(discriminator_bytes);
+        let payload = &input[INSTRUCTION_DISCRIMINATOR_LEN..];
+        let instruction = match discriminator {
             0 => EntropyInstruction::Initialize,
             1 => EntropyInstruction::RegisterProvider,
             2 => EntropyInstruction::Request,

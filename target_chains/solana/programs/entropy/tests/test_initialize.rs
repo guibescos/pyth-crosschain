@@ -34,7 +34,8 @@ fn build_initialize_ix(
         pyth_fee_lamports,
         default_provider: default_provider.to_bytes(),
     };
-    let mut data = vec![EntropyInstruction::Initialize as u8];
+    let mut data = Vec::with_capacity(8 + core::mem::size_of::<InitializeArgs>());
+    data.extend_from_slice(&EntropyInstruction::Initialize.discriminator());
     data.extend_from_slice(bytemuck::bytes_of(&args));
 
     Instruction {

@@ -52,7 +52,7 @@ fn build_initialize_ix(
 #[tokio::test]
 async fn test_initialize_happy_path() {
     let program_id = Pubkey::new_unique();
-    let (mut banks_client, payer, recent_blockhash) = ProgramTest::new(
+    let (banks_client, payer, recent_blockhash) = ProgramTest::new(
         "entropy",
         program_id,
         processor!(entropy::processor::process_instruction),
@@ -109,7 +109,7 @@ async fn test_initialize_happy_path() {
 #[tokio::test]
 async fn test_initialize_rejects_zero_admin() {
     let program_id = Pubkey::new_unique();
-    let (mut banks_client, payer, recent_blockhash) = ProgramTest::new(
+    let (banks_client, payer, recent_blockhash) = ProgramTest::new(
         "entropy",
         program_id,
         processor!(entropy::processor::process_instruction),
@@ -129,18 +129,15 @@ async fn test_initialize_rejects_zero_admin() {
     transaction.sign(&[&payer], recent_blockhash);
     let err = banks_client.process_transaction(transaction).await.unwrap_err();
     assert_eq!(
-        err,
-        BanksClientError::TransactionError(TransactionError::InstructionError(
-            0,
-            InstructionError::InvalidArgument
-        ))
+        err.unwrap(),
+        TransactionError::InstructionError(0, InstructionError::InvalidArgument)
     );
 }
 
 #[tokio::test]
 async fn test_initialize_rejects_zero_default_provider() {
     let program_id = Pubkey::new_unique();
-    let (mut banks_client, payer, recent_blockhash) = ProgramTest::new(
+    let (banks_client, payer, recent_blockhash) = ProgramTest::new(
         "entropy",
         program_id,
         processor!(entropy::processor::process_instruction),
@@ -160,10 +157,7 @@ async fn test_initialize_rejects_zero_default_provider() {
     transaction.sign(&[&payer], recent_blockhash);
     let err = banks_client.process_transaction(transaction).await.unwrap_err();
     assert_eq!(
-        err,
-        BanksClientError::TransactionError(TransactionError::InstructionError(
-            0,
-            InstructionError::InvalidArgument
-        ))
+        err.unwrap(),
+        TransactionError::InstructionError(0, InstructionError::InvalidArgument)
     );
 }

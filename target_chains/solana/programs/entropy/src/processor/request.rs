@@ -123,10 +123,6 @@ pub fn process_request(program_id: &Pubkey, accounts: &[AccountInfo], data: &[u8
         provider.default_compute_unit_limit,
         args.compute_unit_limit,
     )?;
-    let _required_fee = provider_fee
-        .checked_add(config.pyth_fee_lamports)
-        .ok_or(ProgramError::InvalidArgument)?;
-
     if provider_fee > 0 {
         let transfer_ix = system_instruction::transfer(payer.key, provider_vault.key, provider_fee);
         invoke(

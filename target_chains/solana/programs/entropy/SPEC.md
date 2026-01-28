@@ -36,6 +36,7 @@ Key differences driven by Solana:
 PDA: `seeds = ["config"]`
 
 Fields (fixed-size; use zero-copy/POD layout, no Borsh):
+- `discriminator: [u8; 8]` (u64 little-endian, value `0`)
 - `admin: Pubkey`
 - `pyth_fee_lamports: u64`
 - `accrued_pyth_fees_lamports: u64`
@@ -43,6 +44,7 @@ Fields (fixed-size; use zero-copy/POD layout, no Borsh):
 - `proposed_admin: Pubkey` (zero pubkey if none)
 - `seed: [u8; 32]` (for PRNG used by requestV2 convenience methods)
 - `bump: u8`
+- `_padding0: [u8; 7]` (reserved for alignment)
 
 Notes:
 - This replaces `EntropyState.State.admin`, `pythFeeInWei`, `accruedPythFeesInWei`, `defaultProvider`,
@@ -54,6 +56,7 @@ PDA: `seeds = ["provider", provider_authority_pubkey]`
 The provider authority is the signer on register/update/withdraw.
 
 Fields (use zero-copy/POD layout; fixed-size):
+- `discriminator: [u8; 8]` (u64 little-endian, value `1`)
 - `provider_authority: Pubkey` (redundant but explicit)
 - `fee_lamports: u64`
 - `accrued_fees_lamports: u64`
@@ -63,6 +66,7 @@ Fields (use zero-copy/POD layout; fixed-size):
 - `commitment_metadata: [u8; COMMITMENT_METADATA_LEN]`
 - `uri_len: u16`
 - `uri: [u8; URI_LEN]`
+- `_padding0: [u8; 4]` (reserved for alignment)
 - `end_sequence_number: u64`
 - `sequence_number: u64` (next sequence number to assign)
 - `current_commitment: [u8; 32]`
@@ -71,6 +75,7 @@ Fields (use zero-copy/POD layout; fixed-size):
 - `max_num_hashes: u32`
 - `default_compute_unit_limit: u32`
 - `bump: u8`
+- `_padding1: [u8; 7]` (reserved for alignment)
 
 Notes:
 - Mirrors `EntropyStructsV2.ProviderInfo` and Ethereum registration semantics.
@@ -93,22 +98,28 @@ Creation/ownership:
   until the request is executed, so PDA derivation with `sequence_number` is not viable.
 
 Fields (fixed-size; use zero-copy/POD layout, no Borsh):
+- `discriminator: [u8; 8]` (u64 little-endian, value `2`)
 - `provider: Pubkey`
 - `sequence_number: u64`
 - `num_hashes: u32`
 - `commitment: [u8; 32]` (sha256(user_commitment || provider_commitment))
+- `_padding0: [u8; 4]` (reserved for alignment)
 - `request_slot: u64` (Solana slot at request time)
 - `requester_program_id: Pubkey`
 - `requester_signer: Pubkey` (PDA of requester program)
 - `payer: Pubkey`
-- `use_blockhash: bool`
+- `use_blockhash: u8`
 - `callback_status: u8` (see Status Constants)
+- `_padding1: [u8; 2]` (reserved for alignment)
 - `compute_unit_limit: u32` (stored as hint; fee calc uses this)
 - `callback_program_id: Pubkey` (zero pubkey = no callback)
 - `callback_accounts_len: u8`
+- `_padding2: [u8; 1]` (reserved for alignment)
 - `callback_accounts: [CallbackMeta; MAX_CALLBACK_ACCOUNTS]`
 - `callback_ix_data_len: u16`
 - `callback_ix_data: [u8; CALLBACK_IX_DATA_LEN]`
+- `bump: u8`
+- `_padding3: [u8; 3]` (reserved for alignment)
 
 Notes:
 - Replaces `EntropyStructsV2.Request` + callback status.
@@ -184,10 +195,9 @@ Checks:
 Mirrors `register` in EVM.
 
 Accounts:
-- `[signer]` provider_authority
+- `[signer, writable]` provider_authority
 - `[writable]` provider PDA (init if needed)
 - `[writable]` provider_vault PDA (init if needed)
-- `[writable]` config PDA
 - `system_program`
 
 Args:

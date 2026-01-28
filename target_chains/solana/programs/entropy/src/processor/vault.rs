@@ -9,10 +9,10 @@ use solana_program::{
 
 use crate::error::EntropyError;
 
-pub fn init_vault_pda(
-    payer: &AccountInfo,
-    vault: &AccountInfo,
-    system_program_account: &AccountInfo,
+pub fn init_vault_pda<'a>(
+    payer: &AccountInfo<'a>,
+    vault: &AccountInfo<'a>,
+    system_program_account: &AccountInfo<'a>,
 ) -> ProgramResult {
     if vault.owner != &system_program::ID || vault.data_len() != 0 {
         return Err(EntropyError::InvalidAccount.into());

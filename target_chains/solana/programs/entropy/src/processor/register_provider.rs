@@ -5,6 +5,7 @@ use solana_program::{
     program::invoke_signed,
     program_error::ProgramError,
     pubkey::Pubkey,
+    sysvar::{rent::Rent, Sysvar},
     system_instruction,
     system_program,
 };

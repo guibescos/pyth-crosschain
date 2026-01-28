@@ -22,7 +22,7 @@ Solana program mirrors the same protocol with explicit accounts for provider sta
 vaults.
 
 Key differences driven by Solana:
-- Storage is explicit via PDAs instead of EVM mappings/arrays.
+- Storage is explicit via PDAs for program state; request accounts are client-provided signer accounts initialized by the entropy program (not PDAs).
 - Fees are held in PDA-owned vault accounts and transferred via system instructions.
 - Callbacks are CPIs to the requester program (if provided). The request stores the callback program id
   plus the full callback account metas and callback instruction data to replay at reveal. Callback programs must authenticate the
@@ -82,8 +82,15 @@ PDA: `seeds = ["provider_vault", provider_authority_pubkey]`
 
 System account holding lamports that back `provider.accrued_fees_lamports`.
 
-### 2.4 Request account
-PDA: `seeds = ["request", provider_authority_pubkey, sequence_number_le_bytes]`
+### 2.4 Request account (program-initialized, not a PDA)
+Type: System account created by the entropy program using a client-provided signer account.
+
+Creation/ownership:
+- The client generates a new keypair for each request and passes it as a writable signer.
+- The entropy program invokes the system program to create/allocate the account with the
+  request data size and assign it to the entropy program (payer funds rent/execution).
+- The request account is **not** a PDA. The caller cannot know the assigned `sequence_number`
+  until the request is executed, so PDA derivation with `sequence_number` is not viable.
 
 Fields (fixed-size; use zero-copy/POD layout, no Borsh):
 - `provider: Pubkey`
@@ -102,11 +109,14 @@ Fields (fixed-size; use zero-copy/POD layout, no Borsh):
 - `callback_accounts: [CallbackMeta; MAX_CALLBACK_ACCOUNTS]`
 - `callback_ix_data_len: u16`
 - `callback_ix_data: [u8; CALLBACK_IX_DATA_LEN]`
-- `bump: u8`
 
 Notes:
 - Replaces `EntropyStructsV2.Request` + callback status.
-- The request account is created by the payer and closed on reveal; lamports returned to payer.
+- The request account is created by the entropy program (using payer funds) and closed on
+  reveal; lamports returned to payer.
+- Program must validate that the request account is a signer, writable, system-owned,
+  and uninitialized before `create_account`, then verify it is sized correctly and owned
+  by the entropy program before writing fields.
 - `CallbackMeta` layout (fixed-size): `{ pubkey: Pubkey, is_signer: bool, is_writable: bool }`.
   The order of `callback_accounts` is the CPI account order.
 - `callback_accounts` stores the full account metas supplied at request time. These are used to
@@ -196,7 +206,7 @@ Accounts:
 - `[signer]` requester_signer (PDA of requester program)
 - `[writable, signer]` payer system account
 - `[readonly]` requester_program (invoker program id)
-- `[writable]` request PDA (init)
+- `[writable, signer]` request account (new, uninitialized system account)
 - `[writable]` provider PDA
 - `[writable]` provider_vault PDA
 - `[writable]` config PDA
@@ -218,6 +228,11 @@ Behavior:
 - Verify `requester_signer` is the PDA derived by `requester_program` using
   `seeds = ["requester_signer", entropy_program_id]` and the provided bump, and
   require it to sign (via CPI `invoke_signed` from the requester program).
+- Use `system_program::create_account` to initialize the request account, funded by the payer,
+  and assign it to the entropy program. The request account must be a signer, writable, and
+  system-owned prior to creation.
+- After creation, validate the request account is owned by the entropy program and has the
+  expected data size before writing fields.
 - Record `request_slot`, `requester_program_id`, `requester_signer`, `payer`, `use_blockhash`.
 - `callback_status = CALLBACK_NOT_NECESSARY`, `callback_program_id = Pubkey::default()`.
 - Fee: `required_fee = provider_fee + config.pyth_fee_lamports` where provider_fee scales
@@ -253,7 +268,7 @@ Mirrors `reveal` in EVM.
 Accounts:
 - `[signer]` requester_signer
 - `[writable]` payer (refund destination)
-- `[writable]` request PDA
+- `[writable]` request account
 - `[writable]` provider PDA
 - `slot_hashes` sysvar (readonly)
 - `system_program` (for close)
@@ -280,7 +295,7 @@ Behavior:
 Mirrors `revealWithCallback` in EVM.
 
 Accounts:
-- `[writable]` request PDA
+- `[writable]` request account
 - `[writable]` provider PDA
 - `slot_hashes` sysvar (readonly)
 - `[readonly]` entropy_signer (PDA of entropy program)
@@ -436,6 +451,8 @@ These can be program logs or a dedicated event account if needed by clients.
   to minimize compute units.
 - Use `solana_program::hash::hash` for sha256.
 - Enforce PDA seeds as described above; reject accounts with wrong PDA or owner.
+- Request accounts are not PDAs; initialize them via `create_account`, then validate owner,
+  writable, and expected data size.
 - Validate signer/auth rules: provider authority for provider writes; admin for governance;
   requester for `reveal` (no callback).
 - Store the full callback account metas and instruction data in the request account; validate

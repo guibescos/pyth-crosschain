@@ -25,7 +25,8 @@ Key differences driven by Solana:
 - Storage is explicit via PDAs instead of EVM mappings/arrays.
 - Fees are held in PDA-owned vault accounts and transferred via system instructions.
 - Callbacks are CPIs to the requester program (if provided). The request stores the callback program id
-  plus the full callback account metas and callback instruction data to replay at reveal.
+  plus the full callback account metas and callback instruction data to replay at reveal. Callback programs must authenticate the
+  caller via the `entropy_signer` PDA (not via `callback_program_id` alone).
 - "Gas limit" becomes a compute-unit limit hint (still stored for compatibility and fee calculation).
 - Blockhash use is implemented via Sysvar SlotHashes instead of EVM `blockhash`.
 
@@ -115,10 +116,19 @@ Notes:
   Recommended constants: `MAX_CALLBACK_ACCOUNTS = 16`, `CALLBACK_IX_DATA_LEN = 256`.
 
 
+
 ### 2.5 Pyth fee vault
 PDA: `seeds = ["pyth_fee_vault"]`
 
 System account holding lamports that back `config.accrued_pyth_fees_lamports`.
+
+### 2.6 Entropy signer (program-derived signer)
+PDA: `seeds = ["entropy_signer"]`
+
+Signer PDA used by the entropy program when invoking callback programs. The program should sign CPI
+instructions with `invoke_signed` using `["entropy_signer", bump]`. Callback programs must verify that
+the provided `entropy_signer` account matches `find_program_address(["entropy_signer"], entropy_program_id)`
+and that it is a signer.
 
 ## 3. Status constants (mirror EntropyStatusConstants)
 
@@ -273,6 +283,7 @@ Accounts:
 - `[writable]` request PDA
 - `[writable]` provider PDA
 - `slot_hashes` sysvar (readonly)
+- `[signer]` entropy_signer (PDA of entropy program)
 - `[readonly]` callback_program (if callback required)
 - `callback accounts` (remaining accounts; must match stored `callback_accounts`)
 - `system_program` (for close)
@@ -286,6 +297,8 @@ Args:
 Behavior:
 - `callback_status` must be `CALLBACK_NOT_STARTED` or `CALLBACK_FAILED`.
 - Verify commitment and compute random number.
+- `entropy_signer` must match `find_program_address(["entropy_signer"], entropy_program_id)` and
+  be a signer (via `invoke_signed`).
 - If `callback_program_id` is non-zero, verify the remaining accounts match the stored
   `callback_accounts` (pubkey + signer + writable). CPI into callback program with
   instruction data = `callback_ix_data || entropy_callback_payload`, where the payload

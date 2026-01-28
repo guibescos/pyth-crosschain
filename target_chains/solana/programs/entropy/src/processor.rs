@@ -1,15 +1,32 @@
-use solana_program::{account_info::AccountInfo, entrypoint::ProgramResult, pubkey::Pubkey};
+use bytemuck::from_bytes_mut;
+use solana_program::{
+    account_info::{next_account_info, AccountInfo},
+    entrypoint::ProgramResult,
+    program::invoke_signed,
+    program_error::ProgramError,
+    pubkey::Pubkey,
+    system_instruction,
+    system_program,
+    sysvar::{rent::Rent, Sysvar},
+};
 
-use crate::{error::EntropyError, instruction::EntropyInstruction};
+use crate::{
+    accounts::Config,
+    constants::{CONFIG_SEED, PYTH_FEE_VAULT_SEED},
+    discriminator::config_discriminator,
+    error::EntropyError,
+    instruction::{EntropyInstruction, InitializeArgs},
+    pda::{config_pda, pyth_fee_vault_pda},
+};
 
 pub fn process_instruction(
-    _program_id: &Pubkey,
-    _accounts: &[AccountInfo],
+    program_id: &Pubkey,
+    accounts: &[AccountInfo],
     data: &[u8],
 ) -> ProgramResult {
-    let (instruction, _payload) = EntropyInstruction::parse(data)?;
+    let (instruction, payload) = EntropyInstruction::parse(data)?;
     match instruction {
-        EntropyInstruction::Initialize => Err(EntropyError::NotImplemented.into()),
+        EntropyInstruction::Initialize => process_initialize(program_id, accounts, payload),
         EntropyInstruction::RegisterProvider => Err(EntropyError::NotImplemented.into()),
         EntropyInstruction::Request => Err(EntropyError::NotImplemented.into()),
         EntropyInstruction::RequestWithCallback => Err(EntropyError::NotImplemented.into()),
@@ -20,4 +37,126 @@ pub fn process_instruction(
         EntropyInstruction::WithdrawProviderFees => Err(EntropyError::NotImplemented.into()),
         EntropyInstruction::Governance => Err(EntropyError::NotImplemented.into()),
     }
+}
+
+fn process_initialize(
+    program_id: &Pubkey,
+    accounts: &[AccountInfo],
+    data: &[u8],
+) -> ProgramResult {
+    let args = parse_initialize_args(data)?;
+
+    if args.admin == [0u8; 32] || args.default_provider == [0u8; 32] {
+        return Err(ProgramError::InvalidArgument);
+    }
+
+    let mut account_info_iter = accounts.iter();
+    let payer = next_account_info(&mut account_info_iter)?;
+    let config_account = next_account_info(&mut account_info_iter)?;
+    let pyth_fee_vault = next_account_info(&mut account_info_iter)?;
+    let system_program_account = next_account_info(&mut account_info_iter)?;
+
+    if !payer.is_signer {
+        return Err(ProgramError::MissingRequiredSignature);
+    }
+
+    if !config_account.is_writable || !pyth_fee_vault.is_writable {
+        return Err(EntropyError::InvalidAccount.into());
+    }
+
+    if system_program_account.key != &system_program::ID {
+        return Err(EntropyError::InvalidAccount.into());
+    }
+
+    let (expected_config, config_bump) = config_pda(program_id);
+    if config_account.key != &expected_config {
+        return Err(EntropyError::InvalidPda.into());
+    }
+
+    let (expected_fee_vault, fee_vault_bump) = pyth_fee_vault_pda(program_id);
+    if pyth_fee_vault.key != &expected_fee_vault {
+        return Err(EntropyError::InvalidPda.into());
+    }
+
+    if config_account.owner != &system_program::ID || config_account.data_len() != 0 {
+        return Err(EntropyError::InvalidAccount.into());
+    }
+
+    if pyth_fee_vault.owner != &system_program::ID || pyth_fee_vault.data_len() != 0 {
+        return Err(EntropyError::InvalidAccount.into());
+    }
+
+    let rent = Rent::get()?;
+    let config_lamports = rent.minimum_balance(Config::LEN);
+    let create_config_ix = system_instruction::create_account(
+        payer.key,
+        config_account.key,
+        config_lamports,
+        Config::LEN as u64,
+        program_id,
+    );
+    invoke_signed(
+        &create_config_ix,
+        &[payer.clone(), config_account.clone(), system_program_account.clone()],
+        &[&[CONFIG_SEED, &[config_bump]]],
+    )?;
+
+    let vault_lamports = rent.minimum_balance(0);
+    let create_vault_ix = system_instruction::create_account(
+        payer.key,
+        pyth_fee_vault.key,
+        vault_lamports,
+        0,
+        &system_program::ID,
+    );
+    invoke_signed(
+        &create_vault_ix,
+        &[
+            payer.clone(),
+            pyth_fee_vault.clone(),
+            system_program_account.clone(),
+        ],
+        &[&[PYTH_FEE_VAULT_SEED, &[fee_vault_bump]]],
+    )?;
+
+    if config_account.owner != program_id || config_account.data_len() != Config::LEN {
+        return Err(EntropyError::InvalidAccount.into());
+    }
+
+    let mut config_data = config_account.data.borrow_mut();
+    let config = from_bytes_mut::<Config>(&mut config_data);
+    *config = Config {
+        discriminator: config_discriminator(),
+        admin: args.admin,
+        pyth_fee_lamports: args.pyth_fee_lamports,
+        accrued_pyth_fees_lamports: 0,
+        default_provider: args.default_provider,
+        proposed_admin: [0u8; 32],
+        seed: [0u8; 32],
+        bump: config_bump,
+        _padding0: [0u8; 7],
+    };
+
+    Ok(())
+}
+
+fn parse_initialize_args(data: &[u8]) -> Result<InitializeArgs, ProgramError> {
+    if data.len() != core::mem::size_of::<InitializeArgs>() {
+        return Err(ProgramError::InvalidInstructionData);
+    }
+
+    let mut admin = [0u8; 32];
+    admin.copy_from_slice(&data[..32]);
+
+    let mut pyth_fee_bytes = [0u8; 8];
+    pyth_fee_bytes.copy_from_slice(&data[32..40]);
+
+    let mut default_provider = [0u8; 32];
+    default_provider.copy_from_slice(&data[40..72]);
+
+    Ok(InitializeArgs {
+        admin,
+        pyth_fee_lamports: u64::from_le_bytes(pyth_fee_bytes),
+        default_provider,
+    })
 }

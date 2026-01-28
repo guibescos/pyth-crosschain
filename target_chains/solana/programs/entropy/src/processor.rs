@@ -1,4 +1,4 @@
-use bytemuck::from_bytes_mut;
+use bytemuck::{from_bytes_mut, try_from_bytes};
 use solana_program::{
     account_info::{next_account_info, AccountInfo},
     entrypoint::ProgramResult,
@@ -140,23 +140,11 @@ fn process_initialize(
     Ok(())
 }
 
-fn parse_initialize_args(data: &[u8]) -> Result<InitializeArgs, ProgramError> {
+fn parse_initialize_args(data: &[u8]) -> Result<&InitializeArgs, ProgramError> {
     if data.len() != core::mem::size_of::<InitializeArgs>() {
         return Err(ProgramError::InvalidInstructionData);
     }
 
-    let mut admin = [0u8; 32];
-    admin.copy_from_slice(&data[..32]);
-
-    let mut pyth_fee_bytes = [0u8; 8];
-    pyth_fee_bytes.copy_from_slice(&data[32..40]);
-
-    let mut default_provider = [0u8; 32];
-    default_provider.copy_from_slice(&data[40..72]);
-
-    Ok(InitializeArgs {
-        admin,
-        pyth_fee_lamports: u64::from_le_bytes(pyth_fee_bytes),
-        default_provider,
-    })
+    try_from_bytes::<InitializeArgs>(data)
+        .map_err(|_| ProgramError::InvalidInstructionData)
 }

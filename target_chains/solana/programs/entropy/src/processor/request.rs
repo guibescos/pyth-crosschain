@@ -176,6 +176,7 @@ pub fn process_request(
     request.use_blockhash = args.use_blockhash;
     request.callback_status = CALLBACK_NOT_NECESSARY;
     request.compute_unit_limit = provider.default_compute_unit_limit;
+    request.payer = payer.key.to_bytes();
     request.discriminator = request_discriminator();
 
     // Return the assigned sequence number for CPI callers.

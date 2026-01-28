@@ -90,7 +90,9 @@ Fields (fixed-size; use zero-copy/POD layout, no Borsh):
 - `num_hashes: u32`
 - `commitment: [u8; 32]` (sha256(user_commitment || provider_commitment))
 - `request_slot: u64` (Solana slot at request time)
-- `requester: Pubkey`
+- `requester_program_id: Pubkey`
+- `requester_signer: Pubkey` (PDA of requester program)
+- `payer: Pubkey`
 - `use_blockhash: bool`
 - `callback_status: u8` (see Status Constants)
 - `compute_unit_limit: u32` (stored as hint; fee calc uses this)
@@ -100,9 +102,9 @@ Fields (fixed-size; use zero-copy/POD layout, no Borsh):
 
 Notes:
 - Replaces `EntropyStructsV2.Request` + callback status.
-- The request account is created by the requester and closed on reveal; lamports returned to requester.
+- The request account is created by the payer and closed on reveal; lamports returned to payer.
 - `callback_accounts_hash` is a sha256 of the metas supplied at request time to bind
-  callback accounts. If not used, enforce only that the requester signs.
+  callback accounts. If not used, enforce only that the requester_signer signs.
 
 ### 2.5 Pyth fee vault
 PDA: `seeds = ["pyth_fee_vault"]`
@@ -172,8 +174,9 @@ Behavior:
 Mirrors `request` in EVM.
 
 Accounts:
-- `[signer]` requester
-- `[writable]` requester (payer) system account
+- `[signer]` requester_signer (PDA of requester program)
+- `[writable, signer]` payer system account
+- `[readonly]` requester_program (invoker program id)
 - `[writable]` request PDA (init)
 - `[writable]` provider PDA
 - `[writable]` provider_vault PDA
@@ -193,11 +196,14 @@ Behavior:
 - Compute `num_hashes = sequence_number - provider.current_commitment_sequence_number`.
 - If `max_num_hashes != 0` and `num_hashes > max_num_hashes`, error `LastRevealedTooOld`.
 - `commitment = sha256(user_commitment || provider.current_commitment)`.
-- Record `request_slot`, `requester`, `use_blockhash`.
+- Verify `requester_signer` is the PDA derived by `requester_program` using
+  `seeds = ["requester_signer", entropy_program_id]` and the provided bump, and
+  require it to sign (via CPI `invoke_signed` from the requester program).
+- Record `request_slot`, `requester_program_id`, `requester_signer`, `payer`, `use_blockhash`.
 - `callback_status = CALLBACK_NOT_NECESSARY`, `callback_program_id = Pubkey::default()`.
 - Fee: `required_fee = provider_fee + config.pyth_fee_lamports` where provider_fee scales
   by `compute_unit_limit` when `default_compute_unit_limit > 0` (see Fee Calculation).
-- Transfer lamports from requester to provider_vault and pyth_fee_vault and bump accrued counters.
+- Transfer lamports from payer to provider_vault and pyth_fee_vault and bump accrued counters.
 
 ### 4.4 Request with callback (V2)
 Mirrors `requestV2` and `requestWithCallback` in EVM.
@@ -214,7 +220,7 @@ Args:
 
 Behavior:
 - For requestV2 convenience, generate `user_randomness` via PRNG seeded from config.seed,
-  current slot, recent blockhash, and requester. Store back into config.seed.
+  current slot, recent blockhash, and requester_signer. Store back into config.seed.
 - `user_commitment = sha256(user_randomness)`; `use_blockhash = false`.
 - `callback_status = CALLBACK_NOT_STARTED`.
 - Store `compute_unit_limit` (if 0, use provider default at reveal/fee calc).
@@ -224,7 +230,8 @@ Behavior:
 Mirrors `reveal` in EVM.
 
 Accounts:
-- `[signer]` requester
+- `[signer]` requester_signer
+- `[writable]` payer (refund destination)
 - `[writable]` request PDA
 - `[writable]` provider PDA
 - `slot_hashes` sysvar (readonly)
@@ -239,12 +246,14 @@ Args:
 Behavior:
 - Ensure request exists and matches provider/sequence.
 - `callback_status` must be `CALLBACK_NOT_NECESSARY`.
-- `requester` must sign.
+- `requester_signer` must sign and match the PDA derived from
+  `request.requester_program_id` with `seeds = ["requester_signer", entropy_program_id]`.
+- `payer` must match `request.payer`.
 - Verify commitment and compute random number (see Section 6).
 - If `use_blockhash` true, load hash from `slot_hashes` using `request_slot`. If missing, error
   `BlockhashUnavailable`.
 - Update provider current commitment if sequence_number is newer.
-- Close request account (lamports to requester).
+- Close request account (lamports to payer).
 
 ### 4.6 Reveal with callback
 Mirrors `revealWithCallback` in EVM.

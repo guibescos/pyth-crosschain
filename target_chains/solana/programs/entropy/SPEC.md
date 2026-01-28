@@ -28,6 +28,8 @@ Key differences driven by Solana:
   and optional account hash to bind the callback accounts.
 - "Gas limit" becomes a compute-unit limit hint (still stored for compatibility and fee calculation).
 - Blockhash use is implemented via Sysvar SlotHashes instead of EVM `blockhash`.
+- Request accounts are client-generated, ephemeral system accounts (non-PDA) because the
+  assigned sequence number is not known until the request instruction executes.
 
 ## 2. Program accounts and PDAs
 
@@ -81,8 +83,8 @@ PDA: `seeds = ["provider_vault", provider_authority_pubkey]`
 
 System account holding lamports that back `provider.accrued_fees_lamports`.
 
-### 2.4 Request account
-PDA: `seeds = ["request", provider_authority_pubkey, sequence_number_le_bytes]`
+### 2.4 Request account (ephemeral, non-PDA)
+Address: client-generated system account (not a PDA), created and funded by the requester.
 
 Fields (fixed-size; use zero-copy/POD layout, no Borsh):
 - `provider: Pubkey`
@@ -100,25 +102,56 @@ Fields (fixed-size; use zero-copy/POD layout, no Borsh):
 
 Notes:
 - Replaces `EntropyStructsV2.Request` + callback status.
-- The request account is created by the requester and closed on reveal; lamports returned to requester.
+- The request account is created by the requester (system account, owned by this program) and closed on
+  reveal; lamports returned to requester.
 - `callback_accounts_hash` is a sha256 of the metas supplied at request time to bind
   callback accounts. If not used, enforce only that the requester signs.
+- The program must treat the request account as ephemeral: it is initialized in the request instruction
+  and should not be reused after close. Clients choose a fresh keypair per request.
 
 ### 2.5 Pyth fee vault
 PDA: `seeds = ["pyth_fee_vault"]`
 
 System account holding lamports that back `config.accrued_pyth_fees_lamports`.
 
-## 3. Status constants (mirror EntropyStatusConstants)
+## 3. Request sequencing and lifecycle
+
+### 3.1 Sequence numbering
+- `provider.sequence_number` is the next sequence number to assign.
+- Each request instruction assigns `sequence_number = provider.sequence_number` and increments it.
+- `provider.end_sequence_number` is exclusive; requests at or beyond it must fail with
+  `OutOfRandomness`.
+- The assigned `sequence_number` is stored in the request account and used for reveals.
+
+### 3.2 Discovery of assigned sequence number
+- Because request accounts are non-PDA, clients cannot derive the request address from the sequence.
+- Clients discover the assigned sequence number by reading the request account data after the
+  request transaction lands.
+- The program should also emit a log/event with `(request_account, provider, sequence_number)` to
+  support indexers and light clients.
+
+### 3.3 Account lifecycle (ephemeral request accounts)
+- The requester creates a fresh request account (system `create_account`) with owner set to this
+  program, enough lamports for rent exemption, and the fixed request data size.
+- The request instruction initializes the account data; it must reject already-initialized accounts.
+- On successful reveal, the program closes the request account and returns lamports to the
+  stored `requester`.
+- If a callback reveal fails, the request account remains open to allow retries; it is only closed
+  after a successful callback.
+- Request accounts must not be reused across requests.
+
+## 4. Status constants (mirror EntropyStatusConstants)
 
 - `CALLBACK_NOT_NECESSARY = 0`
 - `CALLBACK_NOT_STARTED = 1`
 - `CALLBACK_IN_PROGRESS = 2`
 - `CALLBACK_FAILED = 3`
 
-## 4. Instructions
+## 5. Instructions
 
-### 4.1 Initialize
+Note: In this spec, "reveal" is the fulfill step for a request.
+
+### 5.1 Initialize
 Create config + pyth fee vault.
 
 Accounts:
@@ -135,7 +168,7 @@ Args:
 Checks:
 - Admin and default provider are non-zero.
 
-### 4.2 Register provider (create or rotate)
+### 5.2 Register provider (create or rotate)
 Mirrors `register` in EVM.
 
 Accounts:
@@ -168,13 +201,13 @@ Behavior:
   - increment `sequence_number` by 1
 - If provider already exists, update in-place (rotation).
 
-### 4.3 Request (no callback)
+### 5.3 Request (no callback)
 Mirrors `request` in EVM.
 
 Accounts:
 - `[signer]` requester
 - `[writable]` requester (payer) system account
-- `[writable]` request PDA (init)
+- `[signer, writable]` request account (client-generated, already created with owner = this program)
 - `[writable]` provider PDA
 - `[writable]` provider_vault PDA
 - `[writable]` config PDA
@@ -198,8 +231,9 @@ Behavior:
 - Fee: `required_fee = provider_fee + config.pyth_fee_lamports` where provider_fee scales
   by `compute_unit_limit` when `default_compute_unit_limit > 0` (see Fee Calculation).
 - Transfer lamports from requester to provider_vault and pyth_fee_vault and bump accrued counters.
+- Initialize the request account data only if it is uninitialized and owned by this program.
 
-### 4.4 Request with callback (V2)
+### 5.4 Request with callback (V2)
 Mirrors `requestV2` and `requestWithCallback` in EVM.
 
 Accounts:
@@ -220,12 +254,12 @@ Behavior:
 - Store `compute_unit_limit` (if 0, use provider default at reveal/fee calc).
 - Store `callback_program_id` and optionally `callback_accounts_hash`.
 
-### 4.5 Reveal (no callback)
+### 5.5 Reveal (no callback)
 Mirrors `reveal` in EVM.
 
 Accounts:
 - `[signer]` requester
-- `[writable]` request PDA
+- `[writable]` request account
 - `[writable]` provider PDA
 - `slot_hashes` sysvar (readonly)
 - `system_program` (for close)
@@ -240,17 +274,17 @@ Behavior:
 - Ensure request exists and matches provider/sequence.
 - `callback_status` must be `CALLBACK_NOT_NECESSARY`.
 - `requester` must sign.
-- Verify commitment and compute random number (see Section 6).
+- Verify commitment and compute random number (see Section 7).
 - If `use_blockhash` true, load hash from `slot_hashes` using `request_slot`. If missing, error
   `BlockhashUnavailable`.
 - Update provider current commitment if sequence_number is newer.
 - Close request account (lamports to requester).
 
-### 4.6 Reveal with callback
+### 5.6 Reveal with callback
 Mirrors `revealWithCallback` in EVM.
 
 Accounts:
-- `[writable]` request PDA
+- `[writable]` request account
 - `[writable]` provider PDA
 - `slot_hashes` sysvar (readonly)
 - `[readonly]` callback_program (if callback required)
@@ -272,7 +306,7 @@ Behavior:
 - If CPI fails and status was NOT_STARTED, mark as CALLBACK_FAILED.
 - If CPI succeeds, close request account.
 
-### 4.7 Advance provider commitment
+### 5.7 Advance provider commitment
 Mirrors `advanceProviderCommitment` in EVM.
 
 Accounts:
@@ -292,7 +326,7 @@ Checks/behavior:
 - If `current_commitment_sequence_number >= sequence_number`, set
   `sequence_number = current_commitment_sequence_number + 1`.
 
-### 4.8 Provider config updates
+### 5.8 Provider config updates
 Mirror EVM setters. Each requires provider authority or fee manager as in EVM.
 
 Instructions:
@@ -303,7 +337,7 @@ Instructions:
 - `set_max_num_hashes(new_max)`
 - `set_default_compute_unit_limit(new_limit)`
 
-### 4.9 Withdraw provider fees
+### 5.9 Withdraw provider fees
 
 Instructions:
 - `withdraw(amount, recipient)` (provider authority)
@@ -319,7 +353,7 @@ Accounts:
 Checks:
 - Sufficient accrued fees.
 
-### 4.10 Governance/admin
+### 5.10 Governance/admin
 Mirror `EntropyGovernance`.
 
 Instructions:
@@ -340,7 +374,7 @@ Rules:
 - Admin auth should mirror Ethereum's `_authoriseAdminAction`. In the absence of an on-chain
   owner, require `config.admin` to sign.
 
-## 5. Fee calculation
+## 6. Fee calculation
 
 Ethereum logic (see `getProviderFee`):
 - Provider charges `fee` for `defaultGasLimit`.
@@ -353,7 +387,7 @@ Solana mapping:
 - If `default_compute_unit_limit > 0` and `rounded_limit > default`,
   `additional = (rounded_limit - default) * fee / default`.
 
-## 6. Hashing and randomness
+## 7. Hashing and randomness
 
 - Use sha256: `sha256(user_commitment || provider_commitment)` and
   for `combine_random_values` = sha256(user || provider || blockhash).
@@ -364,7 +398,23 @@ Solana mapping:
 - PRNG for requestV2 convenience should mix `config.seed`, current slot, recent blockhash,
   and requester pubkey.
 
-## 7. Errors (mapping from EntropyErrors)
+## 8. Security constraints
+
+- **Request account validity:** Must be owned by this program, sized correctly, and uninitialized
+  before request; reject reused accounts. Require the request account to be a signer in the request
+  instruction to prove the client created the keypair.
+- **Sequence integrity:** Assign sequence numbers strictly from `provider.sequence_number` and
+  increment atomically; enforce `sequence_number < end_sequence_number` and `num_hashes` bounds.
+- **Commitment correctness:** Verify commitment hashes and provider contributions as in the EVM
+  spec; reject mismatches with `IncorrectRevelation`.
+- **Authorization:** Only provider authority (or fee manager where applicable) may mutate provider
+  state or withdraw fees; only admin may perform governance actions.
+- **Requester protection:** For reveal without callback, require `requester` to sign; always close
+  the request account to the stored `requester` to prevent rent theft.
+- **Callback binding:** If `callback_accounts_hash` is set, re-hash the remaining account metas on
+  reveal and enforce equality to prevent account substitution.
+
+## 9. Errors (mapping from EntropyErrors)
 
 Suggested error enum (names match Solidity where possible):
 - `AssertionFailure`
@@ -383,7 +433,7 @@ Suggested error enum (names match Solidity where possible):
 - `InsufficientGas` (map to callback compute budget not sufficient)
 - `MaxGasLimitExceeded` (map to compute unit limit too large)
 
-## 8. Events/logs
+## 10. Events/logs
 
 Solana logs should mirror the logical events:
 - Provider registered
@@ -395,7 +445,7 @@ Solana logs should mirror the logical events:
 
 These can be program logs or a dedicated event account if needed by clients.
 
-## 9. Pinocchio implementation notes
+## 11. Pinocchio implementation notes
 
 - Use zero-copy POD structs for state (fixed byte layout; no Borsh, no manual pack/unpack)
   to minimize compute units.
@@ -410,7 +460,7 @@ These can be program logs or a dedicated event account if needed by clients.
   common paths and reserve a variant only for truly variable-length inputs (e.g., callback
   account metas).
 
-## 10. Data layout sizing (guidance)
+## 12. Data layout sizing (guidance)
 
 Use fixed-size allocations with max lengths for provider metadata/URI and keep the constants
 stable for deterministic sizing. If you need larger values, use a separate `ProviderMetadata`

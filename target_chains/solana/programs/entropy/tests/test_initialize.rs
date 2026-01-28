@@ -72,8 +72,7 @@ async fn test_initialize_happy_path() {
         default_provider,
         pyth_fee_lamports,
     );
-    let mut transaction =
-        Transaction::new_with_payer(&[instruction], Some(&payer.pubkey()));
+    let mut transaction = Transaction::new_with_payer(&[instruction], Some(&payer.pubkey()));
     transaction.sign(&[&payer], recent_blockhash);
     banks_client.process_transaction(transaction).await.unwrap();
 
@@ -129,8 +128,7 @@ async fn test_initialize_records_prefunded_fee_vault() {
         &fee_vault_address,
         pre_fund_lamports,
     );
-    let mut prefund_tx =
-        Transaction::new_with_payer(&[prefund_ix], Some(&payer.pubkey()));
+    let mut prefund_tx = Transaction::new_with_payer(&[prefund_ix], Some(&payer.pubkey()));
     prefund_tx.sign(&[&payer], recent_blockhash);
     banks_client.process_transaction(prefund_tx).await.unwrap();
 
@@ -142,8 +140,7 @@ async fn test_initialize_records_prefunded_fee_vault() {
         Pubkey::new_unique(),
         1234,
     );
-    let mut transaction =
-        Transaction::new_with_payer(&[instruction], Some(&payer.pubkey()));
+    let mut transaction = Transaction::new_with_payer(&[instruction], Some(&payer.pubkey()));
     transaction.sign(&[&payer], recent_blockhash);
     banks_client.process_transaction(transaction).await.unwrap();
 
@@ -187,10 +184,12 @@ async fn test_initialize_rejects_zero_admin() {
         Pubkey::new_unique(),
         1,
     );
-    let mut transaction =
-        Transaction::new_with_payer(&[instruction], Some(&payer.pubkey()));
+    let mut transaction = Transaction::new_with_payer(&[instruction], Some(&payer.pubkey()));
     transaction.sign(&[&payer], recent_blockhash);
-    let err = banks_client.process_transaction(transaction).await.unwrap_err();
+    let err = banks_client
+        .process_transaction(transaction)
+        .await
+        .unwrap_err();
     assert_eq!(
         err.unwrap(),
         TransactionError::InstructionError(0, InstructionError::InvalidArgument)
@@ -215,10 +214,12 @@ async fn test_initialize_rejects_zero_default_provider() {
         Pubkey::default(),
         1,
     );
-    let mut transaction =
-        Transaction::new_with_payer(&[instruction], Some(&payer.pubkey()));
+    let mut transaction = Transaction::new_with_payer(&[instruction], Some(&payer.pubkey()));
     transaction.sign(&[&payer], recent_blockhash);
-    let err = banks_client.process_transaction(transaction).await.unwrap_err();
+    let err = banks_client
+        .process_transaction(transaction)
+        .await
+        .unwrap_err();
     assert_eq!(
         err.unwrap(),
         TransactionError::InstructionError(0, InstructionError::InvalidArgument)

@@ -1,13 +1,20 @@
 use {
     bytemuck::{bytes_of, try_from_bytes},
-    entropy::{instruction::EntropyInstruction, accounts::Provider, constants::{COMMITMENT_METADATA_LEN, URI_LEN}, discriminator::{config_discriminator, provider_discriminator}, error::EntropyError, instruction::{RegisterProviderArgs, InitializeArgs}, pda::{config_pda, provider_pda, provider_vault_pda}
+    entropy::{
+        accounts::Provider,
+        constants::{COMMITMENT_METADATA_LEN, URI_LEN},
+        discriminator::{config_discriminator, provider_discriminator},
+        error::EntropyError,
+        instruction::EntropyInstruction,
+        instruction::{InitializeArgs, RegisterProviderArgs},
+        pda::{config_pda, provider_pda, provider_vault_pda},
     },
     solana_program::{
         instruction::{AccountMeta, Instruction},
         pubkey::Pubkey,
         system_program,
     },
-    solana_program_test::{ProgramTest, processor},
+    solana_program_test::{processor, ProgramTest},
     solana_sdk::{
         account::Account,
         instruction::InstructionError,
@@ -84,8 +91,7 @@ fn build_register_args(
     assert!(uri.len() <= URI_LEN);
 
     let mut commitment_metadata_buf = [0u8; COMMITMENT_METADATA_LEN];
-    commitment_metadata_buf[..commitment_metadata.len()]
-        .copy_from_slice(commitment_metadata);
+    commitment_metadata_buf[..commitment_metadata.len()].copy_from_slice(commitment_metadata);
 
     let mut uri_buf = [0u8; URI_LEN];
     uri_buf[..uri.len()].copy_from_slice(uri);
@@ -116,8 +122,7 @@ async fn initialize_config(
         1234,
     );
     let recent_blockhash = banks_client.get_latest_blockhash().await.unwrap();
-    let mut transaction =
-        Transaction::new_with_payer(&[instruction], Some(&payer.pubkey()));
+    let mut transaction = Transaction::new_with_payer(&[instruction], Some(&payer.pubkey()));
     transaction.sign(&[payer], recent_blockhash);
     banks_client.process_transaction(transaction).await.unwrap();
 
@@ -163,8 +168,7 @@ async fn test_register_provider_happy_path() {
         true,
     );
     let recent_blockhash = banks_client.get_latest_blockhash().await.unwrap();
-    let mut transaction =
-        Transaction::new_with_payer(&[instruction], Some(&payer.pubkey()));
+    let mut transaction = Transaction::new_with_payer(&[instruction], Some(&payer.pubkey()));
     transaction.sign(&[&payer], recent_blockhash);
     banks_client.process_transaction(transaction).await.unwrap();
 
@@ -191,7 +195,10 @@ async fn test_register_provider_happy_path() {
     assert_eq!(provider.current_commitment_sequence_number, 0);
     assert_eq!(provider.sequence_number, 1);
     assert_eq!(provider.end_sequence_number, 5);
-    assert_eq!(provider.commitment_metadata_len, commitment_metadata.len() as u16);
+    assert_eq!(
+        provider.commitment_metadata_len,
+        commitment_metadata.len() as u16
+    );
     assert_eq!(
         &provider.commitment_metadata[..commitment_metadata.len()],
         commitment_metadata
@@ -242,8 +249,7 @@ async fn test_register_provider_rotation_updates_commitment_and_sequence() {
         true,
     );
     let recent_blockhash = banks_client.get_latest_blockhash().await.unwrap();
-    let mut transaction =
-        Transaction::new_with_payer(&[instruction], Some(&payer.pubkey()));
+    let mut transaction = Transaction::new_with_payer(&[instruction], Some(&payer.pubkey()));
     transaction.sign(&[&payer], recent_blockhash);
     banks_client.process_transaction(transaction).await.unwrap();
 
@@ -260,8 +266,7 @@ async fn test_register_provider_rotation_updates_commitment_and_sequence() {
         .unwrap();
 
     let second_commitment = [9u8; 32];
-    let second_args =
-        build_register_args(55, second_commitment, 4, b"meta-2", b"uri-2");
+    let second_args = build_register_args(55, second_commitment, 4, b"meta-2", b"uri-2");
     let instruction = build_register_provider_ix(
         program_id,
         payer.pubkey(),
@@ -272,8 +277,7 @@ async fn test_register_provider_rotation_updates_commitment_and_sequence() {
         true,
     );
     let recent_blockhash = banks_client.get_latest_blockhash().await.unwrap();
-    let mut transaction =
-        Transaction::new_with_payer(&[instruction], Some(&payer.pubkey()));
+    let mut transaction = Transaction::new_with_payer(&[instruction], Some(&payer.pubkey()));
     transaction.sign(&[&payer], recent_blockhash);
     banks_client.process_transaction(transaction).await.unwrap();
 
@@ -283,13 +287,28 @@ async fn test_register_provider_rotation_updates_commitment_and_sequence() {
         .unwrap()
         .unwrap();
     let provider = try_from_bytes::<Provider>(&provider_after.data).unwrap();
-    assert_eq!(provider.sequence_number, provider_before_data.sequence_number + 1);
-    assert_eq!(provider.end_sequence_number, provider_before_data.sequence_number + 4);
-    assert_eq!(provider.original_commitment_sequence_number, provider_before_data.sequence_number);
-    assert_eq!(provider.current_commitment_sequence_number, provider_before_data.sequence_number);
+    assert_eq!(
+        provider.sequence_number,
+        provider_before_data.sequence_number + 1
+    );
+    assert_eq!(
+        provider.end_sequence_number,
+        provider_before_data.sequence_number + 4
+    );
+    assert_eq!(
+        provider.original_commitment_sequence_number,
+        provider_before_data.sequence_number
+    );
+    assert_eq!(
+        provider.current_commitment_sequence_number,
+        provider_before_data.sequence_number
+    );
     assert_eq!(provider.original_commitment, second_commitment);
     assert_eq!(provider.current_commitment, second_commitment);
-    assert_eq!(provider.accrued_fees_lamports, provider_before_data.accrued_fees_lamports);
+    assert_eq!(
+        provider.accrued_fees_lamports,
+        provider_before_data.accrued_fees_lamports
+    );
 
     let vault_after = banks_client
         .get_account(provider_vault)
@@ -329,10 +348,12 @@ async fn test_register_provider_rejects_zero_chain_length() {
         true,
     );
     let recent_blockhash = banks_client.get_latest_blockhash().await.unwrap();
-    let mut transaction =
-        Transaction::new_with_payer(&[instruction], Some(&payer.pubkey()));
+    let mut transaction = Transaction::new_with_payer(&[instruction], Some(&payer.pubkey()));
     transaction.sign(&[&payer], recent_blockhash);
-    let err = banks_client.process_transaction(transaction).await.unwrap_err();
+    let err = banks_client
+        .process_transaction(transaction)
+        .await
+        .unwrap_err();
     assert_eq!(
         err.unwrap(),
         TransactionError::InstructionError(0, InstructionError::InvalidArgument)
@@ -368,10 +389,12 @@ async fn test_register_provider_requires_provider_authority_signer() {
         false,
     );
     let recent_blockhash = banks_client.get_latest_blockhash().await.unwrap();
-    let mut transaction =
-        Transaction::new_with_payer(&[instruction], Some(&payer.pubkey()));
+    let mut transaction = Transaction::new_with_payer(&[instruction], Some(&payer.pubkey()));
     transaction.sign(&[&payer], recent_blockhash);
-    let err = banks_client.process_transaction(transaction).await.unwrap_err();
+    let err = banks_client
+        .process_transaction(transaction)
+        .await
+        .unwrap_err();
     assert_eq!(
         err.unwrap(),
         TransactionError::InstructionError(0, InstructionError::MissingRequiredSignature)
@@ -407,10 +430,12 @@ async fn test_register_provider_rejects_wrong_provider_pda() {
         true,
     );
     let recent_blockhash = banks_client.get_latest_blockhash().await.unwrap();
-    let mut transaction =
-        Transaction::new_with_payer(&[instruction], Some(&payer.pubkey()));
+    let mut transaction = Transaction::new_with_payer(&[instruction], Some(&payer.pubkey()));
     transaction.sign(&[&payer], recent_blockhash);
-    let err = banks_client.process_transaction(transaction).await.unwrap_err();
+    let err = banks_client
+        .process_transaction(transaction)
+        .await
+        .unwrap_err();
     assert_eq!(
         err.unwrap(),
         TransactionError::InstructionError(
@@ -460,10 +485,12 @@ async fn test_register_provider_rejects_existing_provider_wrong_owner_or_size() 
         true,
     );
     let recent_blockhash = banks_client.get_latest_blockhash().await.unwrap();
-    let mut transaction =
-        Transaction::new_with_payer(&[instruction], Some(&payer.pubkey()));
+    let mut transaction = Transaction::new_with_payer(&[instruction], Some(&payer.pubkey()));
     transaction.sign(&[&payer, &provider_authority], recent_blockhash);
-    let err = banks_client.process_transaction(transaction).await.unwrap_err();
+    let err = banks_client
+        .process_transaction(transaction)
+        .await
+        .unwrap_err();
     assert_eq!(
         err.unwrap(),
         TransactionError::InstructionError(

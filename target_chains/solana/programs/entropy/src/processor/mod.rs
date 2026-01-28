@@ -5,8 +5,8 @@ mod vault;
 
 use solana_program::{account_info::AccountInfo, entrypoint::ProgramResult, pubkey::Pubkey};
 
-use crate::{error::EntropyError, instruction::EntropyInstruction};
 use self::{initialize::process_initialize, register_provider::process_register_provider};
+use crate::{error::EntropyError, instruction::EntropyInstruction};
 
 pub fn process_instruction(
     program_id: &Pubkey,

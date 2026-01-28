@@ -14,7 +14,10 @@ pub fn provider_pda(program_id: &Pubkey, provider_authority: &Pubkey) -> (Pubkey
 }
 
 pub fn provider_vault_pda(program_id: &Pubkey, provider_authority: &Pubkey) -> (Pubkey, u8) {
-    Pubkey::find_program_address(&[PROVIDER_VAULT_SEED, provider_authority.as_ref()], program_id)
+    Pubkey::find_program_address(
+        &[PROVIDER_VAULT_SEED, provider_authority.as_ref()],
+        program_id,
+    )
 }
 
 pub fn request_pda(

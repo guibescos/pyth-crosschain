@@ -16,8 +16,8 @@ use crate::{
     pda::{config_pda, pyth_fee_vault_pda},
 };
 
-use super::vault::init_vault_pda;
 use super::pda::init_pda_mut;
+use super::vault::init_vault_pda;
 
 pub fn process_initialize(
     program_id: &Pubkey,
@@ -94,6 +94,5 @@ fn parse_initialize_args(data: &[u8]) -> Result<&InitializeArgs, ProgramError> {
         return Err(ProgramError::InvalidInstructionData);
     }
 
-    try_from_bytes::<InitializeArgs>(data)
-        .map_err(|_| ProgramError::InvalidInstructionData)
+    try_from_bytes::<InitializeArgs>(data).map_err(|_| ProgramError::InvalidInstructionData)
 }

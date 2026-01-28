@@ -16,7 +16,10 @@ use crate::{
     pda::{config_pda, provider_pda, provider_vault_pda},
 };
 
-use super::{pda::{init_pda_mut, load_pda, load_pda_mut}, vault::init_vault_pda};
+use super::{
+    pda::{init_pda_mut, load_pda, load_pda_mut},
+    vault::init_vault_pda,
+};
 
 pub fn process_register_provider(
     program_id: &Pubkey,
@@ -86,23 +89,25 @@ pub fn process_register_provider(
             provider_authority,
             provider_account,
             system_program_account,
-            &[PROVIDER_SEED, provider_authority.key.as_ref(), &[provider_bump]],
+            &[
+                PROVIDER_SEED,
+                provider_authority.key.as_ref(),
+                &[provider_bump],
+            ],
             Provider::LEN,
         )?
     } else {
-        load_pda_mut::<Provider>(
+        let provider = load_pda_mut::<Provider>(
             provider_account,
             program_id,
             Provider::LEN,
             provider_discriminator(),
-        )?
+        )?;
+        if provider.provider_authority != provider_authority.key.to_bytes() {
+            return Err(EntropyError::InvalidAccount.into());
+        }
+        provider
     };
-
-    if provider_account.owner != &system_program::ID
-        && provider.provider_authority != provider_authority.key.to_bytes()
-    {
-        return Err(EntropyError::InvalidAccount.into());
-    }
 
     init_vault_pda(provider_authority, provider_vault, system_program_account)?;
 
@@ -120,9 +125,9 @@ pub fn process_register_provider(
     provider.uri = args.uri;
 
     provider.end_sequence_number = provider
-    .sequence_number
-    .checked_add(args.chain_length)
-    .ok_or(ProgramError::InvalidArgument)?;
+        .sequence_number
+        .checked_add(args.chain_length)
+        .ok_or(ProgramError::InvalidArgument)?;
     provider.sequence_number += 1;
 
     provider.bump = provider_bump;
@@ -135,6 +140,5 @@ fn parse_register_provider_args(data: &[u8]) -> Result<&RegisterProviderArgs, Pr
         return Err(ProgramError::InvalidInstructionData);
     }
 
-    try_from_bytes::<RegisterProviderArgs>(data)
-        .map_err(|_| ProgramError::InvalidInstructionData)
+    try_from_bytes::<RegisterProviderArgs>(data).map_err(|_| ProgramError::InvalidInstructionData)
 }

@@ -2,8 +2,7 @@ use solana_program::{
     account_info::AccountInfo,
     entrypoint::ProgramResult,
     program::invoke,
-    system_instruction,
-    system_program,
+    system_instruction, system_program,
     sysvar::{rent::Rent, Sysvar},
 };
 

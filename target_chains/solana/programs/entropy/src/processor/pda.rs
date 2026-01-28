@@ -6,8 +6,7 @@ use solana_program::{
     program::{invoke, invoke_signed},
     program_error::ProgramError,
     pubkey::Pubkey,
-    system_instruction,
-    system_program,
+    system_instruction, system_program,
     sysvar::{rent::Rent, Sysvar},
 };
 
@@ -24,9 +23,7 @@ pub fn load_pda<'a, T: bytemuck::Pod>(
     }
 
     let data = account.data.borrow();
-    let discriminator = data
-        .get(0..8)
-        .ok_or(ProgramError::InvalidAccountData)?;
+    let discriminator = data.get(0..8).ok_or(ProgramError::InvalidAccountData)?;
     if discriminator != expected_discriminator {
         return Err(EntropyError::InvalidAccount.into());
     }
@@ -46,9 +43,7 @@ pub fn load_pda_mut<'a, 'info, T: bytemuck::Pod>(
 
     {
         let data = account.data.borrow();
-        let discriminator = data
-            .get(0..8)
-            .ok_or(ProgramError::InvalidAccountData)?;
+        let discriminator = data.get(0..8).ok_or(ProgramError::InvalidAccountData)?;
         if discriminator != expected_discriminator {
             return Err(EntropyError::InvalidAccount.into());
         }
@@ -84,7 +79,11 @@ pub fn init_pda_mut<'a, 'info, T: bytemuck::Pod>(
         );
         invoke_signed(
             &create_ix,
-            &[payer.clone(), account.clone(), system_program_account.clone()],
+            &[
+                payer.clone(),
+                account.clone(),
+                system_program_account.clone(),
+            ],
             &[seeds],
         )?;
     } else {
@@ -96,7 +95,11 @@ pub fn init_pda_mut<'a, 'info, T: bytemuck::Pod>(
             );
             invoke(
                 &transfer_ix,
-                &[payer.clone(), account.clone(), system_program_account.clone()],
+                &[
+                    payer.clone(),
+                    account.clone(),
+                    system_program_account.clone(),
+                ],
             )?;
         }
 

@@ -152,27 +152,26 @@ pub fn process_register_provider(
         }
     }
 
-    let end_sequence_number = provider
-        .sequence_number
-        .checked_add(args.chain_length)
-        .ok_or(ProgramError::InvalidArgument)?;
-
     provider.discriminator = provider_discriminator();
     provider.provider_authority = provider_authority.key.to_bytes();
+
     provider.fee_lamports = args.fee_lamports;
     provider.original_commitment = args.commitment;
     provider.original_commitment_sequence_number = provider.sequence_number;
+    provider.current_commitment = args.commitment;
+    provider.current_commitment_sequence_number = provider.sequence_number;
     provider.commitment_metadata_len = args.commitment_metadata_len;
     provider.commitment_metadata = args.commitment_metadata;
     provider.uri_len = args.uri_len;
     provider.uri = args.uri;
-    provider._padding0 = [0u8; 4];
-    provider.end_sequence_number = end_sequence_number;
-    provider.sequence_number = provider.sequence_number + 1;
-    provider.current_commitment = args.commitment;
-    provider.current_commitment_sequence_number = provider.sequence_number - 1;
+
+    provider.end_sequence_number = provider
+    .sequence_number
+    .checked_add(args.chain_length)
+    .ok_or(ProgramError::InvalidArgument)?;
+    provider.sequence_number += 1;
+
     provider.bump = provider_bump;
-    provider._padding1 = [0u8; 7];
 
     Ok(())
 }

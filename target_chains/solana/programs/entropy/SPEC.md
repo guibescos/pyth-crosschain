@@ -25,7 +25,7 @@ Key differences driven by Solana:
 - Storage is explicit via PDAs instead of EVM mappings/arrays.
 - Fees are held in PDA-owned vault accounts and transferred via system instructions.
 - Callbacks are CPIs to the requester program (if provided). The request stores the callback program id
-  and optional account hash to bind the callback accounts. Callback programs must authenticate the
+  plus the full callback account metas and callback instruction data to replay at reveal. Callback programs must authenticate the
   caller via the `entropy_signer` PDA (not via `callback_program_id` alone).
 - "Gas limit" becomes a compute-unit limit hint (still stored for compatibility and fee calculation).
 - Blockhash use is implemented via Sysvar SlotHashes instead of EVM `blockhash`.
@@ -98,15 +98,24 @@ Fields (fixed-size; use zero-copy/POD layout, no Borsh):
 - `callback_status: u8` (see Status Constants)
 - `compute_unit_limit: u32` (stored as hint; fee calc uses this)
 - `callback_program_id: Pubkey` (zero pubkey = no callback)
-- `callback_accounts_hash: [u8; 32]` (optional, zero if unused)
+- `callback_accounts_len: u8`
+- `callback_accounts: [CallbackMeta; MAX_CALLBACK_ACCOUNTS]`
+- `callback_ix_data_len: u16`
+- `callback_ix_data: [u8; CALLBACK_IX_DATA_LEN]`
 - `bump: u8`
 
 Notes:
 - Replaces `EntropyStructsV2.Request` + callback status.
 - The request account is created by the payer and closed on reveal; lamports returned to payer.
-- `callback_accounts_hash` is a sha256 of the metas supplied at request time to bind
-  callback accounts. It does not authenticate the caller; callback programs must verify
-  `entropy_signer`. If not used, enforce only that the requester_signer signs.
+- `CallbackMeta` layout (fixed-size): `{ pubkey: Pubkey, is_signer: bool, is_writable: bool }`.
+  The order of `callback_accounts` is the CPI account order.
+- `callback_accounts` stores the full account metas supplied at request time. These are used to
+  validate the accounts passed at reveal and to build the CPI.
+- `callback_ix_data` stores the callback instruction data prefix. Reveal appends the Entropy
+  callback payload `(sequence_number, provider, random_number)` after this prefix.
+  Recommended constants: `MAX_CALLBACK_ACCOUNTS = 16`, `CALLBACK_IX_DATA_LEN = 256`.
+
+
 
 ### 2.5 Pyth fee vault
 PDA: `seeds = ["pyth_fee_vault"]`
@@ -225,8 +234,8 @@ Args:
 - `provider: Pubkey`
 - `user_randomness: [u8; 32]` (or none if using program PRNG)
 - `compute_unit_limit: u32` (0 means provider default)
-- `callback_accounts: Vec<CallbackMeta>` (only if storing hash; otherwise supplied in instruction and
-  optionally validated)
+- `callback_accounts: Vec<CallbackMeta>`
+- `callback_ix_data: Vec<u8>` (prefix bytes for the callback instruction)
 
 Behavior:
 - For requestV2 convenience, generate `user_randomness` via PRNG seeded from config.seed,
@@ -234,7 +243,9 @@ Behavior:
 - `user_commitment = sha256(user_randomness)`; `use_blockhash = false`.
 - `callback_status = CALLBACK_NOT_STARTED`.
 - Store `compute_unit_limit` (if 0, use provider default at reveal/fee calc).
-- Store `callback_program_id` and optionally `callback_accounts_hash`.
+- Store `callback_program_id`, `callback_accounts`, and `callback_ix_data`.
+- Enforce `callback_accounts.len <= MAX_CALLBACK_ACCOUNTS` and
+  `callback_ix_data.len <= CALLBACK_IX_DATA_LEN`.
 
 ### 4.5 Reveal (no callback)
 Mirrors `reveal` in EVM.
@@ -274,7 +285,7 @@ Accounts:
 - `slot_hashes` sysvar (readonly)
 - `[signer]` entropy_signer (PDA of entropy program)
 - `[readonly]` callback_program (if callback required)
-- `callback accounts` (remaining accounts)
+- `callback accounts` (remaining accounts; must match stored `callback_accounts`)
 - `system_program` (for close)
 
 Args:
@@ -288,11 +299,11 @@ Behavior:
 - Verify commitment and compute random number.
 - `entropy_signer` must match `find_program_address(["entropy_signer"], entropy_program_id)` and
   be a signer (via `invoke_signed`).
-- If `callback_program_id` is non-zero, CPI into callback program with
-  (sequence_number, provider, random_number). Recommended: define a Solana entropy
-  callback interface for requesters. The CPI must be signed by `entropy_signer`
-  via `invoke_signed`. Callback programs should re-derive and verify `entropy_signer`
-  using the entropy program id they trust (or a passed-in entropy program account).
+- If `callback_program_id` is non-zero, verify the remaining accounts match the stored
+  `callback_accounts` (pubkey + signer + writable). CPI into callback program with
+  instruction data = `callback_ix_data || entropy_callback_payload`, where the payload
+  encodes (sequence_number, provider, random_number). Recommended: define a Solana entropy
+  callback interface for requesters.
 - If CPI fails and status was NOT_STARTED, mark as CALLBACK_FAILED.
 - If CPI succeeds, close request account.
 
@@ -427,8 +438,8 @@ These can be program logs or a dedicated event account if needed by clients.
 - Enforce PDA seeds as described above; reject accounts with wrong PDA or owner.
 - Validate signer/auth rules: provider authority for provider writes; admin for governance;
   requester for `reveal` (no callback).
-- Store `callback_accounts_hash` if you need to bind the accounts used in reveal; compute
-  the hash from the full account metas array supplied at request time.
+- Store the full callback account metas and instruction data in the request account; validate
+  the reveal remaining accounts against the stored metas before CPI.
 - Close request accounts on success to reclaim rent.
 - Keep instruction data small; define a compact instruction enum with fixed-size fields for
   common paths and reserve a variant only for truly variable-length inputs (e.g., callback
@@ -438,6 +449,7 @@ These can be program logs or a dedicated event account if needed by clients.
 
 Use fixed-size allocations with max lengths for provider metadata/URI and keep the constants
 stable for deterministic sizing. If you need larger values, use a separate `ProviderMetadata`
-PDA with fixed-size buffers plus `*_len` fields.
+PDA with fixed-size buffers plus `*_len` fields. For callbacks, cap `MAX_CALLBACK_ACCOUNTS`
+and `CALLBACK_IX_DATA_LEN` to keep the request account deterministic.
 
 Ensure the account sizes are deterministic for Mollusk tests.

@@ -59,7 +59,6 @@ fn build_register_provider_ix(
     provider_authority: Pubkey,
     provider_account: Pubkey,
     provider_vault: Pubkey,
-    config: Pubkey,
     args: RegisterProviderArgs,
     provider_authority_is_signer: bool,
 ) -> Instruction {
@@ -74,7 +73,6 @@ fn build_register_provider_ix(
             AccountMeta::new(provider_authority, provider_authority_is_signer),
             AccountMeta::new(provider_account, false),
             AccountMeta::new(provider_vault, false),
-            AccountMeta::new(config, false),
             AccountMeta::new_readonly(system_program::id(), false),
         ],
     }
@@ -151,8 +149,6 @@ async fn test_register_provider_happy_path() {
 
     let (provider_address, provider_bump) = provider_pda(&program_id, &payer.pubkey());
     let (provider_vault, _) = provider_vault_pda(&program_id, &payer.pubkey());
-    let (config_address, _) = config_pda(&program_id);
-
     let commitment = [7u8; 32];
     let commitment_metadata = b"meta";
     let uri = b"https://example.com/provider";
@@ -163,7 +159,6 @@ async fn test_register_provider_happy_path() {
         payer.pubkey(),
         provider_address,
         provider_vault,
-        config_address,
         args,
         true,
     );
@@ -235,8 +230,6 @@ async fn test_register_provider_rotation_updates_commitment_and_sequence() {
 
     let (provider_address, _) = provider_pda(&program_id, &payer.pubkey());
     let (provider_vault, _) = provider_vault_pda(&program_id, &payer.pubkey());
-    let (config_address, _) = config_pda(&program_id);
-
     let first_commitment = [1u8; 32];
     let first_args = build_register_args(10, first_commitment, 3, b"meta-1", b"uri-1");
     let instruction = build_register_provider_ix(
@@ -244,7 +237,6 @@ async fn test_register_provider_rotation_updates_commitment_and_sequence() {
         payer.pubkey(),
         provider_address,
         provider_vault,
-        config_address,
         first_args,
         true,
     );
@@ -272,7 +264,6 @@ async fn test_register_provider_rotation_updates_commitment_and_sequence() {
         payer.pubkey(),
         provider_address,
         provider_vault,
-        config_address,
         second_args,
         true,
     );
@@ -335,15 +326,12 @@ async fn test_register_provider_rejects_zero_chain_length() {
 
     let (provider_address, _) = provider_pda(&program_id, &payer.pubkey());
     let (provider_vault, _) = provider_vault_pda(&program_id, &payer.pubkey());
-    let (config_address, _) = config_pda(&program_id);
-
     let args = build_register_args(1, [0u8; 32], 0, b"meta", b"uri");
     let instruction = build_register_provider_ix(
         program_id,
         payer.pubkey(),
         provider_address,
         provider_vault,
-        config_address,
         args,
         true,
     );
@@ -376,15 +364,12 @@ async fn test_register_provider_requires_provider_authority_signer() {
     let provider_authority = Pubkey::new_unique();
     let (provider_address, _) = provider_pda(&program_id, &provider_authority);
     let (provider_vault, _) = provider_vault_pda(&program_id, &provider_authority);
-    let (config_address, _) = config_pda(&program_id);
-
     let args = build_register_args(1, [1u8; 32], 1, b"meta", b"uri");
     let instruction = build_register_provider_ix(
         program_id,
         provider_authority,
         provider_address,
         provider_vault,
-        config_address,
         args,
         false,
     );
@@ -417,15 +402,12 @@ async fn test_register_provider_rejects_wrong_provider_pda() {
     let provider_authority = payer.pubkey();
     let provider_address = Pubkey::new_unique();
     let (provider_vault, _) = provider_vault_pda(&program_id, &provider_authority);
-    let (config_address, _) = config_pda(&program_id);
-
     let args = build_register_args(1, [2u8; 32], 2, b"meta", b"uri");
     let instruction = build_register_provider_ix(
         program_id,
         provider_authority,
         provider_address,
         provider_vault,
-        config_address,
         args,
         true,
     );
@@ -472,15 +454,12 @@ async fn test_register_provider_rejects_existing_provider_wrong_owner_or_size() 
     initialize_config(&mut banks_client, &payer, program_id).await;
 
     let (provider_vault, _) = provider_vault_pda(&program_id, &provider_authority.pubkey());
-    let (config_address, _) = config_pda(&program_id);
-
     let args = build_register_args(1, [3u8; 32], 3, b"meta", b"uri");
     let instruction = build_register_provider_ix(
         program_id,
         provider_authority.pubkey(),
         provider_address,
         provider_vault,
-        config_address,
         args,
         true,
     );

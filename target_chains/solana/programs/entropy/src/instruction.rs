@@ -78,7 +78,6 @@ pub struct RegisterProviderArgs {
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct RequestArgs {
-    pub provider: PubkeyBytes,
     pub user_commitment: [u8; 32],
     pub use_blockhash: u8,
     pub _padding0: [u8; 3],

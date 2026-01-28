@@ -91,7 +91,6 @@ async fn test_initialize_happy_path() {
     assert_eq!(config.discriminator, config_discriminator());
     assert_eq!(config.admin, admin.to_bytes());
     assert_eq!(config.pyth_fee_lamports, pyth_fee_lamports);
-    assert_eq!(config.accrued_pyth_fees_lamports, 0);
     assert_eq!(config.default_provider, default_provider.to_bytes());
     assert_eq!(config.proposed_admin, [0u8; 32]);
     assert_eq!(config.seed, [0u8; 32]);
@@ -105,6 +104,69 @@ async fn test_initialize_happy_path() {
     assert_eq!(fee_vault_account.owner, system_program::id());
     assert_eq!(fee_vault_account.data.len(), 0);
     assert!(fee_vault_account.lamports >= Rent::default().minimum_balance(0));
+    assert_eq!(
+        config.accrued_pyth_fees_lamports,
+        fee_vault_account.lamports
+    );
+}
+
+#[tokio::test]
+async fn test_initialize_records_prefunded_fee_vault() {
+    let program_id = Pubkey::new_unique();
+    let (banks_client, payer, recent_blockhash) = ProgramTest::new(
+        "entropy",
+        program_id,
+        processor!(entropy::processor::process_instruction),
+    )
+    .start()
+    .await;
+
+    let (fee_vault_address, _) = pyth_fee_vault_pda(&program_id);
+    let pre_fund_lamports = Rent::default().minimum_balance(0) + 42;
+
+    let prefund_ix = solana_sdk::system_instruction::transfer(
+        &payer.pubkey(),
+        &fee_vault_address,
+        pre_fund_lamports,
+    );
+    let mut prefund_tx =
+        Transaction::new_with_payer(&[prefund_ix], Some(&payer.pubkey()));
+    prefund_tx.sign(&[&payer], recent_blockhash);
+    banks_client.process_transaction(prefund_tx).await.unwrap();
+
+    let recent_blockhash = banks_client.get_latest_blockhash().await.unwrap();
+    let instruction = build_initialize_ix(
+        program_id,
+        payer.pubkey(),
+        Pubkey::new_unique(),
+        Pubkey::new_unique(),
+        1234,
+    );
+    let mut transaction =
+        Transaction::new_with_payer(&[instruction], Some(&payer.pubkey()));
+    transaction.sign(&[&payer], recent_blockhash);
+    banks_client.process_transaction(transaction).await.unwrap();
+
+    let (config_address, _) = config_pda(&program_id);
+    let config_account = banks_client
+        .get_account(config_address)
+        .await
+        .unwrap()
+        .unwrap();
+    let config = try_from_bytes::<Config>(&config_account.data).unwrap();
+
+    let fee_vault_account = banks_client
+        .get_account(fee_vault_address)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(fee_vault_account.owner, system_program::id());
+    assert_eq!(fee_vault_account.data.len(), 0);
+    assert_eq!(fee_vault_account.lamports, pre_fund_lamports);
+    assert_eq!(
+        config.accrued_pyth_fees_lamports,
+        fee_vault_account.lamports
+    );
 }
 
 #[tokio::test]

@@ -1,22 +1,17 @@
-use solana_program::hash::hashv;
-
-fn account_discriminator(name: &[u8]) -> [u8; 8] {
-    let hash = hashv(&[b"account:", name]);
-    let mut discriminator = [0u8; 8];
-    discriminator.copy_from_slice(&hash.to_bytes()[..8]);
-    discriminator
+fn account_discriminator(ordinal: u64) -> [u8; 8] {
+    ordinal.to_le_bytes()
 }
 
 pub fn config_discriminator() -> [u8; 8] {
-    account_discriminator(b"Config")
+    account_discriminator(0)
 }
 
 #[allow(dead_code)]
 pub fn provider_discriminator() -> [u8; 8] {
-    account_discriminator(b"Provider")
+    account_discriminator(1)
 }
 
 #[allow(dead_code)]
 pub fn request_discriminator() -> [u8; 8] {
-    account_discriminator(b"Request")
+    account_discriminator(2)
 }

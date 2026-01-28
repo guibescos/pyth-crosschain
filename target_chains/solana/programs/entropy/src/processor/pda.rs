@@ -14,7 +14,7 @@ use solana_program::{
 use crate::error::EntropyError;
 
 pub fn load_pda<'a, T: bytemuck::Pod>(
-    account: &'a AccountInfo<'a>,
+    account: &'a AccountInfo,
     program_id: &Pubkey,
     expected_len: usize,
     expected_discriminator: [u8; 8],
@@ -34,8 +34,8 @@ pub fn load_pda<'a, T: bytemuck::Pod>(
     Ok(Ref::map(data, |data| bytemuck::from_bytes::<T>(data)))
 }
 
-pub fn load_pda_mut<'a, T: bytemuck::Pod>(
-    account: &'a AccountInfo<'a>,
+pub fn load_pda_mut<'a, 'info, T: bytemuck::Pod>(
+    account: &'a AccountInfo<'info>,
     program_id: &Pubkey,
     expected_len: usize,
     expected_discriminator: [u8; 8],
@@ -58,11 +58,11 @@ pub fn load_pda_mut<'a, T: bytemuck::Pod>(
     Ok(RefMut::map(data, |data| from_bytes_mut::<T>(data)))
 }
 
-pub fn init_pda_mut<'a, T: bytemuck::Pod>(
+pub fn init_pda_mut<'a, 'info, T: bytemuck::Pod>(
     program_id: &Pubkey,
-    payer: &AccountInfo<'a>,
-    account: &AccountInfo<'a>,
-    system_program_account: &AccountInfo<'a>,
+    payer: &AccountInfo<'info>,
+    account: &'a AccountInfo<'info>,
+    system_program_account: &AccountInfo<'info>,
     seeds: &[&[u8]],
     space: usize,
 ) -> Result<RefMut<'a, T>, ProgramError> {

@@ -92,6 +92,8 @@ Creation/ownership:
 - The client generates a new keypair for each request and passes it as a writable signer.
 - The entropy program invokes the system program to create/allocate the account with the
   request data size and assign it to the entropy program (payer funds rent/execution).
+- The request account may be pre-funded with lamports; if so, the program will top up to
+  rent-exempt minimum, then allocate/assign it.
 - The request account is **not** a PDA. The caller cannot know the assigned `sequence_number`
   until the request is executed, so PDA derivation with `sequence_number` is not viable.
 
@@ -121,8 +123,6 @@ Fields (fixed-size; use zero-copy/POD layout, no Borsh):
 
 Notes:
 - Replaces `EntropyStructsV2.Request` + callback status.
-- The request account is created by the entropy program (using payer funds) and closed on
-  reveal; lamports returned to payer.
 - The request account layout is fixed-size/zero-copy. Dynamic data (Vec) exists only in
   instruction arguments and is copied into the fixed-size arrays below with explicit
   `*_len` fields.
@@ -137,6 +137,9 @@ Notes:
   callback payload `(sequence_number, provider, random_number)` after this prefix.
   Recommended constants: `MAX_CALLBACK_ACCOUNTS = 16`, `CALLBACK_IX_DATA_LEN = 256`.
   Unused trailing bytes in the fixed-size arrays are ignored and SHOULD be zero-filled.
+- Current `Request` implementation only populates `provider`, `sequence_number`, `num_hashes`,
+  `commitment`, `requester_program_id`, `request_slot`, `use_blockhash`, `callback_status`,
+  `compute_unit_limit`, and `discriminator`. Remaining fields are left as zeroed bytes.
 
 
 
@@ -232,10 +235,9 @@ Accounts:
 - `system_program`
 
 Args:
-- `provider: Pubkey`
 - `user_commitment: [u8; 32]`
-- `use_blockhash: bool`
-- `compute_unit_limit: u32` (stored as 0 for no callback)
+- `use_blockhash: u8` (0 or 1)
+- `compute_unit_limit: u32`
 
 Behavior:
 - Assign `sequence_number = provider.sequence_number` and increment it.
@@ -246,15 +248,19 @@ Behavior:
 - Return data: set Solana return data to the assigned `sequence_number` as a little-endian `u64`
   so CPI callers can read it via `get_return_data`.
 - Verify `requester_signer` is the PDA derived by `requester_program` using
-  `seeds = ["requester_signer", entropy_program_id]` and the provided bump, and
-  require it to sign (via CPI `invoke_signed` from the requester program).
+  `seeds = ["requester_signer", entropy_program_id]`, and require it to sign
+  (via CPI `invoke_signed` from the requester program).
+- Require `provider_vault` and `pyth_fee_vault` to be system-owned with zero data.
 - Use `system_program::create_account` to initialize the request account, funded by the payer,
   and assign it to the entropy program. The request account must be a signer, writable, and
-  system-owned prior to creation.
+  system-owned prior to creation. If the request account is pre-funded, the program will
+  top up to rent-exempt minimum and then allocate/assign.
 - After creation, validate the request account is owned by the entropy program and has the
   expected data size before writing fields.
-- Record `request_slot`, `requester_program_id`, `requester_signer`, `payer`, `use_blockhash`.
-- `callback_status = CALLBACK_NOT_NECESSARY`, `callback_program_id = Pubkey::default()`.
+- Reject `use_blockhash` values other than `0` or `1`.
+- Record `request_slot`, `requester_program_id`, `use_blockhash`.
+- `callback_status = CALLBACK_NOT_NECESSARY`.
+- Store `compute_unit_limit = provider.default_compute_unit_limit` (current implementation).
 - Fee: `required_fee = provider_fee + config.pyth_fee_lamports` where provider_fee scales
   by `compute_unit_limit` when `default_compute_unit_limit > 0` (see Fee Calculation).
 - Transfer lamports from payer to provider_vault and pyth_fee_vault.
@@ -441,9 +447,8 @@ Ethereum logic (see `getProviderFee`):
 Solana mapping:
 - Replace gas limit with compute unit limit. `default_compute_unit_limit` behaves like EVM
   `defaultGasLimit`.
-- `rounded_limit = round_up_to_10k(compute_unit_limit)` (unit = 10k CU).
-- If `default_compute_unit_limit > 0` and `rounded_limit > default`,
-  `additional = (rounded_limit - default) * fee / default`.
+- If `default_compute_unit_limit > 0` and `compute_unit_limit > default`,
+  `additional = (compute_unit_limit - default) * fee / default`.
 
 ## 6. Hashing and randomness
 

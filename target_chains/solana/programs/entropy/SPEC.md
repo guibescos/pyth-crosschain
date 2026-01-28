@@ -134,7 +134,9 @@ Notes:
 ### 2.5 Pyth fee vault
 PDA: `seeds = ["pyth_fee_vault"]`
 
-System account holding lamports that back `config.accrued_pyth_fees_lamports`.
+System account holding lamports that back `config.accrued_pyth_fees_lamports`. The
+account is expected to be system-owned and zero-data; initialize tops it up to the
+rent-exempt minimum rather than allocating data or changing ownership.
 
 ### 2.6 Entropy signer (program-derived signer)
 PDA: `seeds = ["entropy_signer"]`
@@ -157,7 +159,7 @@ and that it is a signer.
 Create config + pyth fee vault.
 
 Accounts:
-- `[signer]` payer
+- `[writable, signer]` payer
 - `[writable]` config PDA
 - `[writable]` pyth_fee_vault PDA
 - `system_program`
@@ -169,6 +171,10 @@ Args:
 
 Checks:
 - Admin and default provider are non-zero.
+- Config PDA must be system-owned with zero data; the program creates it with
+  rent-exempt lamports and assigns it to the entropy program.
+- Pyth fee vault must be system-owned with zero data; the program transfers
+  lamports as needed to reach the rent-exempt minimum.
 
 ### 4.2 Register provider (create or rotate)
 Mirrors `register` in EVM.

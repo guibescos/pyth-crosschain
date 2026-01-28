@@ -119,9 +119,6 @@ pub fn process_request(program_id: &Pubkey, accounts: &[AccountInfo], data: &[u8
     }
 
     let provider_fee = provider.calculate_provider_fee(args.compute_unit_limit);
-    let _required_fee = provider_fee
-        .checked_add(config.pyth_fee_lamports)
-        .ok_or(ProgramError::InvalidArgument)?;
 
     if provider_fee > 0 {
         let transfer_ix = system_instruction::transfer(payer.key, provider_vault.key, provider_fee);
@@ -146,15 +143,6 @@ pub fn process_request(program_id: &Pubkey, accounts: &[AccountInfo], data: &[u8
             ],
         )?;
     }
-
-    provider.accrued_fees_lamports = provider
-        .accrued_fees_lamports
-        .checked_add(provider_fee)
-        .ok_or(ProgramError::InvalidArgument)?;
-    config.accrued_pyth_fees_lamports = config
-        .accrued_pyth_fees_lamports
-        .checked_add(config.pyth_fee_lamports)
-        .ok_or(ProgramError::InvalidArgument)?;
 
     provider.sequence_number = provider
         .sequence_number

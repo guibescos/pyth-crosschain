@@ -73,12 +73,10 @@ pub fn process_initialize(
 
     init_vault_pda(payer, pyth_fee_vault, system_program_account)?;
 
-    let accrued_pyth_fees_lamports = pyth_fee_vault.lamports();
     *config = Config {
         discriminator: config_discriminator(),
         admin: args.admin,
         pyth_fee_lamports: args.pyth_fee_lamports,
-        accrued_pyth_fees_lamports,
         default_provider: args.default_provider,
         proposed_admin: [0u8; 32],
         seed: [0u8; 32],

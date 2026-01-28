@@ -39,7 +39,6 @@ Fields (fixed-size; use zero-copy/POD layout, no Borsh):
 - `discriminator: [u8; 8]` (u64 little-endian, value `0`)
 - `admin: Pubkey`
 - `pyth_fee_lamports: u64`
-- `accrued_pyth_fees_lamports: u64`
 - `default_provider: Pubkey`
 - `proposed_admin: Pubkey` (zero pubkey if none)
 - `seed: [u8; 32]` (for PRNG used by requestV2 convenience methods)
@@ -47,7 +46,7 @@ Fields (fixed-size; use zero-copy/POD layout, no Borsh):
 - `_padding0: [u8; 7]` (reserved for alignment)
 
 Notes:
-- This replaces `EntropyState.State.admin`, `pythFeeInWei`, `accruedPythFeesInWei`, `defaultProvider`,
+- This replaces `EntropyState.State.admin`, `pythFeeInWei`, `defaultProvider`,
   `proposedAdmin`, and `seed`.
 
 ### 2.2 Provider account
@@ -59,7 +58,6 @@ Fields (use zero-copy/POD layout; fixed-size):
 - `discriminator: [u8; 8]` (u64 little-endian, value `1`)
 - `provider_authority: Pubkey` (redundant but explicit)
 - `fee_lamports: u64`
-- `accrued_fees_lamports: u64`
 - `original_commitment: [u8; 32]`
 - `original_commitment_sequence_number: u64`
 - `commitment_metadata_len: u16`
@@ -85,7 +83,7 @@ Notes:
 ### 2.3 Provider fee vault
 PDA: `seeds = ["provider_vault", provider_authority_pubkey]`
 
-System account holding lamports that back `provider.accrued_fees_lamports`.
+System account holding provider fee lamports.
 
 ### 2.4 Request account (program-initialized, not a PDA)
 Type: System account created by the entropy program using a client-provided signer account.
@@ -145,11 +143,9 @@ Notes:
 ### 2.5 Pyth fee vault
 PDA: `seeds = ["pyth_fee_vault"]`
 
-System account holding lamports that back `config.accrued_pyth_fees_lamports`. The
-account is expected to be system-owned and zero-data; initialize tops it up to the
-rent-exempt minimum rather than allocating data or changing ownership. On initialize,
-`config.accrued_pyth_fees_lamports` is set to the vault's lamport balance after any
-top-up so the config tracks the actual vault balance (including pre-funded lamports).
+System account holding pyth fee lamports. The account is expected to be system-owned
+and zero-data; initialize tops it up to the rent-exempt minimum rather than allocating
+data or changing ownership. The vault balance reflects any pre-funded lamports.
 
 ### 2.6 Entropy signer (program-derived signer)
 PDA: `seeds = ["entropy_signer"]`
@@ -188,8 +184,6 @@ Checks:
   rent-exempt lamports and assigns it to the entropy program.
 - Pyth fee vault must be system-owned with zero data; the program transfers
   lamports as needed to reach the rent-exempt minimum.
-- Set `config.accrued_pyth_fees_lamports` to the pyth fee vault's lamport balance
-  after any top-up transfer (including any pre-funded lamports).
 
 ### 4.2 Register provider (create or rotate)
 Mirrors `register` in EVM.
@@ -261,7 +255,7 @@ Behavior:
 - `callback_status = CALLBACK_NOT_NECESSARY`, `callback_program_id = Pubkey::default()`.
 - Fee: `required_fee = provider_fee + config.pyth_fee_lamports` where provider_fee scales
   by `compute_unit_limit` when `default_compute_unit_limit > 0` (see Fee Calculation).
-- Transfer lamports from payer to provider_vault and pyth_fee_vault and bump accrued counters.
+- Transfer lamports from payer to provider_vault and pyth_fee_vault.
 
 ### 4.4 Request with callback (V2)
 Mirrors `requestV2` and `requestWithCallback` in EVM.
@@ -413,7 +407,7 @@ Accounts:
 - `system_program`
 
 Checks:
-- Sufficient accrued fees.
+- Sufficient vault balance.
 
 ### 4.10 Governance/admin
 Mirror `EntropyGovernance`.

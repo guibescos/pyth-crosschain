@@ -126,6 +126,53 @@ pub fn process_request(program_id: &Pubkey, accounts: &[AccountInfo], data: &[u8
         return Err(EntropyError::OutOfRandomness.into());
     }
 
+    let provider_fee = calculate_provider_fee(
+        provider.fee_lamports,
+        provider.default_compute_unit_limit,
+        args.compute_unit_limit,
+    )?;
+    let _required_fee = provider_fee
+        .checked_add(config.pyth_fee_lamports)
+        .ok_or(ProgramError::InvalidArgument)?;
+
+    if provider_fee > 0 {
+        let transfer_ix = system_instruction::transfer(payer.key, provider_vault.key, provider_fee);
+        invoke(
+            &transfer_ix,
+            &[payer.clone(), provider_vault.clone(), system_program_account.clone()],
+        )?;
+    }
+
+    if config.pyth_fee_lamports > 0 {
+        let transfer_ix = system_instruction::transfer(
+            payer.key,
+            pyth_fee_vault.key,
+            config.pyth_fee_lamports,
+        );
+        invoke(
+            &transfer_ix,
+            &[
+                payer.clone(),
+                pyth_fee_vault.clone(),
+                system_program_account.clone(),
+            ],
+        )?;
+    }
+
+    provider.accrued_fees_lamports = provider
+        .accrued_fees_lamports
+        .checked_add(provider_fee)
+        .ok_or(ProgramError::InvalidArgument)?;
+    config.accrued_pyth_fees_lamports = config
+        .accrued_pyth_fees_lamports
+        .checked_add(config.pyth_fee_lamports)
+        .ok_or(ProgramError::InvalidArgument)?;
+
+    provider.sequence_number = provider
+        .sequence_number
+        .checked_add(1)
+        .ok_or(ProgramError::InvalidArgument)?;
+
     let num_hashes = sequence_number
         .checked_sub(provider.current_commitment_sequence_number)
         .ok_or(ProgramError::InvalidArgument)?;
@@ -135,15 +182,6 @@ pub fn process_request(program_id: &Pubkey, accounts: &[AccountInfo], data: &[u8
     let num_hashes = u32::try_from(num_hashes).map_err(|_| ProgramError::InvalidArgument)?;
 
     let commitment = hashv(&[&args.user_commitment, &provider.current_commitment]).to_bytes();
-
-    let provider_fee = calculate_provider_fee(
-        provider.fee_lamports,
-        provider.default_compute_unit_limit,
-        args.compute_unit_limit,
-    )?;
-    let _required_fee = provider_fee
-        .checked_add(config.pyth_fee_lamports)
-        .ok_or(ProgramError::InvalidArgument)?;
 
     let request_slot = Clock::get()?.slot;
 
@@ -185,44 +223,6 @@ pub fn process_request(program_id: &Pubkey, accounts: &[AccountInfo], data: &[u8
     };
 
     drop(request);
-
-    if provider_fee > 0 {
-        let transfer_ix = system_instruction::transfer(payer.key, provider_vault.key, provider_fee);
-        invoke(
-            &transfer_ix,
-            &[payer.clone(), provider_vault.clone(), system_program_account.clone()],
-        )?;
-    }
-
-    if config.pyth_fee_lamports > 0 {
-        let transfer_ix = system_instruction::transfer(
-            payer.key,
-            pyth_fee_vault.key,
-            config.pyth_fee_lamports,
-        );
-        invoke(
-            &transfer_ix,
-            &[
-                payer.clone(),
-                pyth_fee_vault.clone(),
-                system_program_account.clone(),
-            ],
-        )?;
-    }
-
-    provider.accrued_fees_lamports = provider
-        .accrued_fees_lamports
-        .checked_add(provider_fee)
-        .ok_or(ProgramError::InvalidArgument)?;
-    config.accrued_pyth_fees_lamports = config
-        .accrued_pyth_fees_lamports
-        .checked_add(config.pyth_fee_lamports)
-        .ok_or(ProgramError::InvalidArgument)?;
-
-    provider.sequence_number = provider
-        .sequence_number
-        .checked_add(1)
-        .ok_or(ProgramError::InvalidArgument)?;
 
     Ok(())
 }

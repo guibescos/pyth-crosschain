@@ -272,7 +272,7 @@ Accounts:
 - `[writable]` request PDA
 - `[writable]` provider PDA
 - `slot_hashes` sysvar (readonly)
-- `[signer]` entropy_signer (PDA of entropy program)
+- `[readonly]` entropy_signer (PDA of entropy program)
 - `[readonly]` callback_program (if callback required)
 - `callback accounts` (remaining accounts)
 - `system_program` (for close)
@@ -286,13 +286,13 @@ Args:
 Behavior:
 - `callback_status` must be `CALLBACK_NOT_STARTED` or `CALLBACK_FAILED`.
 - Verify commitment and compute random number.
-- `entropy_signer` must match `find_program_address(["entropy_signer"], entropy_program_id)` and
-  be a signer (via `invoke_signed`).
+- `entropy_signer` must match `find_program_address(["entropy_signer"], entropy_program_id)`.
 - If `callback_program_id` is non-zero, CPI into callback program with
   (sequence_number, provider, random_number). Recommended: define a Solana entropy
   callback interface for requesters. The CPI must be signed by `entropy_signer`
   via `invoke_signed`. Callback programs should re-derive and verify `entropy_signer`
-  using the entropy program id they trust (or a passed-in entropy program account).
+  using the entropy program id they trust (or a passed-in entropy program account) and
+  require that `entropy_signer` is a signer in the callback CPI.
 - If CPI fails and status was NOT_STARTED, mark as CALLBACK_FAILED.
 - If CPI succeeds, close request account.
 

@@ -62,7 +62,7 @@ mod requester_program {
             program_id: *entropy_program.key,
             data: entropy_data,
             accounts: vec![
-                AccountMeta::new(*requester_signer.key, true),
+                AccountMeta::new_readonly(*requester_signer.key, true),
                 AccountMeta::new(*payer.key, true),
                 AccountMeta::new_readonly(*requester_program.key, false),
                 AccountMeta::new(*request_account.key, true),

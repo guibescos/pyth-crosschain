@@ -2,6 +2,7 @@ use bytemuck::{from_bytes_mut, try_from_bytes};
 use solana_program::{
     account_info::{next_account_info, AccountInfo},
     entrypoint::ProgramResult,
+    program::invoke,
     program::invoke_signed,
     program_error::ProgramError,
     pubkey::Pubkey,
@@ -12,7 +13,7 @@ use solana_program::{
 
 use crate::{
     accounts::{Config, Provider},
-    constants::{PROVIDER_SEED, PROVIDER_VAULT_SEED},
+    constants::PROVIDER_SEED,
     discriminator::{config_discriminator, provider_discriminator},
     error::EntropyError,
     instruction::RegisterProviderArgs,
@@ -64,7 +65,7 @@ pub fn process_register_provider(
         return Err(EntropyError::InvalidPda.into());
     }
 
-    let (expected_vault, vault_bump) = provider_vault_pda(program_id, provider_authority.key);
+    let (expected_vault, _vault_bump) = provider_vault_pda(program_id, provider_authority.key);
     if provider_vault.key != &expected_vault {
         return Err(EntropyError::InvalidPda.into());
     }
@@ -117,34 +118,27 @@ pub fn process_register_provider(
         return Err(EntropyError::InvalidAccount.into());
     }
 
-    if provider_vault.owner == &system_program::ID
-        && provider_vault.data_len() == 0
-        && provider_vault.lamports() == 0
-    {
-        let rent = Rent::get()?;
-        let vault_lamports = rent.minimum_balance(0);
-        let create_vault_ix = system_instruction::create_account(
+    if provider_vault.owner != &system_program::ID || provider_vault.data_len() != 0 {
+        return Err(EntropyError::InvalidAccount.into());
+    }
+
+    let rent = Rent::get()?;
+    let required_vault_lamports = rent.minimum_balance(0);
+    let current_vault_lamports = provider_vault.lamports();
+    if current_vault_lamports < required_vault_lamports {
+        let transfer_ix = system_instruction::transfer(
             provider_authority.key,
             provider_vault.key,
-            vault_lamports,
-            0,
-            &system_program::ID,
+            required_vault_lamports - current_vault_lamports,
         );
-        invoke_signed(
-            &create_vault_ix,
+        invoke(
+            &transfer_ix,
             &[
                 provider_authority.clone(),
                 provider_vault.clone(),
                 system_program_account.clone(),
             ],
-            &[&[
-                PROVIDER_VAULT_SEED,
-                provider_authority.key.as_ref(),
-                &[vault_bump],
-            ]],
         )?;
-    } else if provider_vault.owner != &system_program::ID || provider_vault.data_len() != 0 {
-        return Err(EntropyError::InvalidAccount.into());
     }
 
     let mut provider_data = provider_account.data.borrow_mut();

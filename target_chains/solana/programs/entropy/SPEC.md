@@ -114,6 +114,9 @@ Notes:
 - Replaces `EntropyStructsV2.Request` + callback status.
 - The request account is created by the entropy program (using payer funds) and closed on
   reveal; lamports returned to payer.
+- The request account layout is fixed-size/zero-copy. Dynamic data (Vec) exists only in
+  instruction arguments and is copied into the fixed-size arrays below with explicit
+  `*_len` fields.
 - Program must validate that the request account is a signer, writable, system-owned,
   and uninitialized before `create_account`, then verify it is sized correctly and owned
   by the entropy program before writing fields.
@@ -124,6 +127,7 @@ Notes:
 - `callback_ix_data` stores the callback instruction data prefix. Reveal appends the Entropy
   callback payload `(sequence_number, provider, random_number)` after this prefix.
   Recommended constants: `MAX_CALLBACK_ACCOUNTS = 16`, `CALLBACK_IX_DATA_LEN = 256`.
+  Unused trailing bytes in the fixed-size arrays are ignored and SHOULD be zero-filled.
 
 
 
@@ -252,15 +256,37 @@ Args:
 - `callback_accounts: Vec<CallbackMeta>`
 - `callback_ix_data: Vec<u8>` (prefix bytes for the callback instruction)
 
+Instruction data encoding (request with callback):
+- `Vec<T>` is encoded as a little-endian `u32` length prefix followed by each element.
+- `CallbackMeta` in instruction data is `{ pubkey: [u8; 32], is_signer: u8, is_writable: u8 }`
+  with booleans encoded as `0`/`1` bytes, in that field order.
+- `Vec<u8>` is encoded as `u32` length + raw bytes (the prefix).
+
 Behavior:
 - For requestV2 convenience, generate `user_randomness` via PRNG seeded from config.seed,
   current slot, recent blockhash, and requester_signer. Store back into config.seed.
 - `user_commitment = sha256(user_randomness)`; `use_blockhash = false`.
 - `callback_status = CALLBACK_NOT_STARTED`.
 - Store `compute_unit_limit` (if 0, use provider default at reveal/fee calc).
-- Store `callback_program_id`, `callback_accounts`, and `callback_ix_data`.
-- Enforce `callback_accounts.len <= MAX_CALLBACK_ACCOUNTS` and
-  `callback_ix_data.len <= CALLBACK_IX_DATA_LEN`.
+- Store `callback_program_id` and copy the instruction Vecs into the fixed-size request fields:
+  - Enforce `callback_accounts.len <= MAX_CALLBACK_ACCOUNTS` and
+    `callback_ix_data.len <= CALLBACK_IX_DATA_LEN`.
+  - Set `callback_accounts_len` / `callback_ix_data_len` to the Vec lengths.
+  - Copy the Vec contents into `callback_accounts` / `callback_ix_data`.
+  - Zero-fill (or ignore) any remaining bytes in the fixed-size arrays.
+
+Example (pseudocode):
+```
+require(callback_accounts.len <= MAX_CALLBACK_ACCOUNTS);
+request.callback_accounts_len = callback_accounts.len as u8;
+request.callback_accounts[0..len] = callback_accounts;
+zero_fill(request.callback_accounts[len..]);
+
+require(callback_ix_data.len <= CALLBACK_IX_DATA_LEN);
+request.callback_ix_data_len = callback_ix_data.len as u16;
+request.callback_ix_data[0..len] = callback_ix_data;
+zero_fill(request.callback_ix_data[len..]);
+```
 
 ### 4.5 Reveal (no callback)
 Mirrors `reveal` in EVM.

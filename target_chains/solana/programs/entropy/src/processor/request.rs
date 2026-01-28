@@ -24,7 +24,7 @@ use crate::{
     pda::{config_pda, provider_pda, provider_vault_pda, pyth_fee_vault_pda},
 };
 
-use super::pda::load_pda_mut;
+use super::pda::{load_pda, load_pda_mut};
 
 pub fn process_request(program_id: &Pubkey, accounts: &[AccountInfo], data: &[u8]) -> ProgramResult {
     let args = parse_request_args(data)?;
@@ -52,7 +52,6 @@ pub fn process_request(program_id: &Pubkey, accounts: &[AccountInfo], data: &[u8
         || !request_account.is_writable
         || !provider_account.is_writable
         || !provider_vault.is_writable
-        || !config_account.is_writable
         || !pyth_fee_vault.is_writable
     {
         return Err(EntropyError::InvalidAccount.into());
@@ -86,7 +85,7 @@ pub fn process_request(program_id: &Pubkey, accounts: &[AccountInfo], data: &[u8
         return Err(EntropyError::InvalidAccount.into());
     }
 
-    let mut config = load_pda_mut::<Config>(
+    let config = load_pda::<Config>(
         config_account,
         program_id,
         Config::LEN,

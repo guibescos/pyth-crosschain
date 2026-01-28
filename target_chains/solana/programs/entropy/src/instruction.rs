@@ -68,7 +68,9 @@ pub struct RegisterProviderArgs {
     pub commitment: [u8; 32],
     pub commitment_metadata_len: u16,
     pub commitment_metadata: [u8; COMMITMENT_METADATA_LEN],
+    pub _padding0: [u8; 6],
     pub chain_length: u64,
     pub uri_len: u16,
     pub uri: [u8; URI_LEN],
+    pub _padding1: [u8; 6],
 }

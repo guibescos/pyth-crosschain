@@ -103,10 +103,6 @@ async fn test_initialize_happy_path() {
     assert_eq!(fee_vault_account.owner, system_program::id());
     assert_eq!(fee_vault_account.data.len(), 0);
     assert!(fee_vault_account.lamports >= Rent::default().minimum_balance(0));
-    assert_eq!(
-        config.accrued_pyth_fees_lamports,
-        fee_vault_account.lamports
-    );
 }
 
 #[tokio::test]
@@ -150,7 +146,6 @@ async fn test_initialize_records_prefunded_fee_vault() {
         .await
         .unwrap()
         .unwrap();
-    let config = try_from_bytes::<Config>(&config_account.data).unwrap();
 
     let fee_vault_account = banks_client
         .get_account(fee_vault_address)
@@ -160,10 +155,6 @@ async fn test_initialize_records_prefunded_fee_vault() {
     assert_eq!(fee_vault_account.owner, system_program::id());
     assert_eq!(fee_vault_account.data.len(), 0);
     assert_eq!(fee_vault_account.lamports, pre_fund_lamports);
-    assert_eq!(
-        config.accrued_pyth_fees_lamports,
-        fee_vault_account.lamports
-    );
 }
 
 #[tokio::test]

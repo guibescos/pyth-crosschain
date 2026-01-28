@@ -69,21 +69,6 @@ pub fn process_request(program_id: &Pubkey, accounts: &[AccountInfo], data: &[u8
         return Err(EntropyError::InvalidPda.into());
     }
 
-    let provider_authority = Pubkey::new_from_array(args.provider);
-    let (expected_provider, _provider_bump) = provider_pda(program_id, &provider_authority);
-    if provider_account.key != &expected_provider {
-        return Err(EntropyError::InvalidPda.into());
-    }
-
-    let (expected_provider_vault, _provider_vault_bump) =
-        provider_vault_pda(program_id, &provider_authority);
-    if provider_vault.key != &expected_provider_vault {
-        return Err(EntropyError::InvalidPda.into());
-    }
-    if provider_vault.owner != &system_program::ID || provider_vault.data_len() != 0 {
-        return Err(EntropyError::InvalidAccount.into());
-    }
-
     let (expected_config, _config_bump) = config_pda(program_id);
     if config_account.key != &expected_config {
         return Err(EntropyError::InvalidPda.into());
@@ -116,8 +101,18 @@ pub fn process_request(program_id: &Pubkey, accounts: &[AccountInfo], data: &[u8
         Provider::LEN,
         provider_discriminator(),
     )?;
+    let provider_authority = Pubkey::new_from_array(provider.provider_authority);
+    let (expected_provider, _provider_bump) = provider_pda(program_id, &provider_authority);
+    if provider_account.key != &expected_provider {
+        return Err(EntropyError::InvalidPda.into());
+    }
 
-    if provider.provider_authority != provider_authority.to_bytes() {
+    let (expected_provider_vault, _provider_vault_bump) =
+        provider_vault_pda(program_id, &provider_authority);
+    if provider_vault.key != &expected_provider_vault {
+        return Err(EntropyError::InvalidPda.into());
+    }
+    if provider_vault.owner != &system_program::ID || provider_vault.data_len() != 0 {
         return Err(EntropyError::InvalidAccount.into());
     }
 
@@ -157,7 +152,7 @@ pub fn process_request(program_id: &Pubkey, accounts: &[AccountInfo], data: &[u8
 
     *request = Request {
         discriminator: request_discriminator(),
-        provider: args.provider,
+        provider: provider.provider_authority,
         sequence_number,
         num_hashes,
         commitment,

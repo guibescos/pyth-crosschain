@@ -82,10 +82,7 @@ pub fn process_request(program_id: &Pubkey, accounts: &[AccountInfo], data: &[u8
         return Err(EntropyError::InvalidAccount.into());
     }
 
-    if request_account.owner != &system_program::ID
-        || request_account.data_len() != 0
-        || request_account.lamports() != 0
-    {
+    if request_account.owner != &system_program::ID || request_account.data_len() != 0 {
         return Err(EntropyError::InvalidAccount.into());
     }
 
@@ -280,21 +277,51 @@ fn init_request_account_mut<'a, 'info>(
 ) -> Result<RefMut<'a, Request>, ProgramError> {
     let rent = Rent::get()?;
     let required_lamports = rent.minimum_balance(space);
-    let create_ix = system_instruction::create_account(
-        payer.key,
-        request_account.key,
-        required_lamports,
-        space as u64,
-        program_id,
-    );
-    invoke(
-        &create_ix,
-        &[
-            payer.clone(),
-            request_account.clone(),
-            system_program_account.clone(),
-        ],
-    )?;
+    if request_account.lamports() == 0 {
+        let create_ix = system_instruction::create_account(
+            payer.key,
+            request_account.key,
+            required_lamports,
+            space as u64,
+            program_id,
+        );
+        invoke(
+            &create_ix,
+            &[
+                payer.clone(),
+                request_account.clone(),
+                system_program_account.clone(),
+            ],
+        )?;
+    } else {
+        let current_lamports = request_account.lamports();
+        if current_lamports < required_lamports {
+            let top_up = required_lamports
+                .checked_sub(current_lamports)
+                .ok_or(ProgramError::InvalidArgument)?;
+            let transfer_ix = system_instruction::transfer(payer.key, request_account.key, top_up);
+            invoke(
+                &transfer_ix,
+                &[
+                    payer.clone(),
+                    request_account.clone(),
+                    system_program_account.clone(),
+                ],
+            )?;
+        }
+
+        let allocate_ix = system_instruction::allocate(request_account.key, space as u64);
+        invoke(
+            &allocate_ix,
+            &[request_account.clone(), system_program_account.clone()],
+        )?;
+
+        let assign_ix = system_instruction::assign(request_account.key, program_id);
+        invoke(
+            &assign_ix,
+            &[request_account.clone(), system_program_account.clone()],
+        )?;
+    }
 
     if request_account.owner != program_id || request_account.data_len() != space {
         return Err(EntropyError::InvalidAccount.into());

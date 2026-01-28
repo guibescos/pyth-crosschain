@@ -1,11 +1,15 @@
 mod initialize;
 mod pda;
 mod register_provider;
+mod request;
 mod vault;
 
 use solana_program::{account_info::AccountInfo, entrypoint::ProgramResult, pubkey::Pubkey};
 
-use self::{initialize::process_initialize, register_provider::process_register_provider};
+use self::{
+    initialize::process_initialize, register_provider::process_register_provider,
+    request::process_request,
+};
 use crate::{error::EntropyError, instruction::EntropyInstruction};
 
 pub fn process_instruction(
@@ -19,7 +23,7 @@ pub fn process_instruction(
         EntropyInstruction::RegisterProvider => {
             process_register_provider(program_id, accounts, payload)
         }
-        EntropyInstruction::Request => Err(EntropyError::NotImplemented.into()),
+        EntropyInstruction::Request => process_request(program_id, accounts, payload),
         EntropyInstruction::RequestWithCallback => Err(EntropyError::NotImplemented.into()),
         EntropyInstruction::Reveal => Err(EntropyError::NotImplemented.into()),
         EntropyInstruction::RevealWithCallback => Err(EntropyError::NotImplemented.into()),

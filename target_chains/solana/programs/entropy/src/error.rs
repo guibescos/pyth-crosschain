@@ -11,6 +11,10 @@ pub enum EntropyError {
     InvalidPda = 2,
     #[error("not implemented")]
     NotImplemented = 3,
+    #[error("out of randomness")]
+    OutOfRandomness = 4,
+    #[error("last revealed too old")]
+    LastRevealedTooOld = 5,
 }
 
 impl From<EntropyError> for solana_program::program_error::ProgramError {

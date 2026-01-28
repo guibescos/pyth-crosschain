@@ -9,6 +9,7 @@ pub type PubkeyBytes = [u8; 32];
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct Config {
+    pub discriminator: [u8; 8],
     pub admin: PubkeyBytes,
     pub pyth_fee_lamports: u64,
     pub accrued_pyth_fees_lamports: u64,
@@ -26,6 +27,7 @@ impl Config {
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct Provider {
+    pub discriminator: [u8; 8],
     pub provider_authority: PubkeyBytes,
     pub fee_lamports: u64,
     pub accrued_fees_lamports: u64,
@@ -66,6 +68,7 @@ impl CallbackMeta {
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct Request {
+    pub discriminator: [u8; 8],
     pub provider: PubkeyBytes,
     pub sequence_number: u64,
     pub num_hashes: u32,

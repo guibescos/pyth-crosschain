@@ -256,6 +256,12 @@ Args:
 - `callback_accounts: Vec<CallbackMeta>`
 - `callback_ix_data: Vec<u8>` (prefix bytes for the callback instruction)
 
+Instruction data encoding (request with callback):
+- `Vec<T>` is encoded as a little-endian `u32` length prefix followed by each element.
+- `CallbackMeta` in instruction data is `{ pubkey: [u8; 32], is_signer: u8, is_writable: u8 }`
+  with booleans encoded as `0`/`1` bytes, in that field order.
+- `Vec<u8>` is encoded as `u32` length + raw bytes (the prefix).
+
 Behavior:
 - For requestV2 convenience, generate `user_randomness` via PRNG seeded from config.seed,
   current slot, recent blockhash, and requester_signer. Store back into config.seed.

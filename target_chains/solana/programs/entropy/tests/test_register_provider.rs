@@ -100,10 +100,12 @@ fn build_register_args(
         fee_lamports,
         commitment,
         commitment_metadata_len: commitment_metadata.len() as u16,
+        _padding0: [0u8; 6],
         commitment_metadata: commitment_metadata_buf,
         chain_length,
         uri_len: uri.len() as u16,
         uri: uri_buf,
+        _padding1: [0u8; 6],
     }
 }
 

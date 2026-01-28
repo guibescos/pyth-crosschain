@@ -258,7 +258,8 @@ Behavior:
 - After creation, validate the request account is owned by the entropy program and has the
   expected data size before writing fields.
 - Reject `use_blockhash` values other than `0` or `1`.
-- Record `request_slot`, `requester_program_id`, `use_blockhash`.
+- Record `request_slot`, `requester_program_id`, `use_blockhash` (requester_signer/payer fields
+  remain zeroed in the current implementation).
 - `callback_status = CALLBACK_NOT_NECESSARY`.
 - Store `compute_unit_limit = provider.default_compute_unit_limit` (current implementation).
 - Fee: `required_fee = provider_fee + config.pyth_fee_lamports` where provider_fee scales

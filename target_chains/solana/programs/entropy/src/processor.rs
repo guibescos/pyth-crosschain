@@ -120,10 +120,6 @@ fn process_initialize(
         )?;
     }
 
-    if config_account.owner != program_id || config_account.data_len() != Config::LEN {
-        return Err(EntropyError::InvalidAccount.into());
-    }
-
     let mut config_data = config_account.data.borrow_mut();
     let config = from_bytes_mut::<Config>(&mut config_data);
     *config = Config {

@@ -1,13 +1,10 @@
-use bytemuck::{from_bytes_mut, try_from_bytes};
+use bytemuck::try_from_bytes;
 use solana_program::{
     account_info::{next_account_info, AccountInfo},
     entrypoint::ProgramResult,
-    program::invoke_signed,
     program_error::ProgramError,
     pubkey::Pubkey,
-    system_instruction,
     system_program,
-    sysvar::{rent::Rent, Sysvar},
 };
 
 use crate::{
@@ -19,6 +16,7 @@ use crate::{
     pda::{config_pda, pyth_fee_vault_pda},
 };
 
+use super::pda_account::init_pda_account;
 use super::vault::init_vault_pda;
 
 pub fn process_initialize(
@@ -60,30 +58,18 @@ pub fn process_initialize(
         return Err(EntropyError::InvalidPda.into());
     }
 
-    if config_account.owner != &system_program::ID || config_account.data_len() != 0 {
-        return Err(EntropyError::InvalidAccount.into());
-    }
-
-    let rent = Rent::get()?;
-    let config_lamports = rent.minimum_balance(Config::LEN);
-    let create_config_ix = system_instruction::create_account(
-        payer.key,
-        config_account.key,
-        config_lamports,
-        Config::LEN as u64,
+    let mut config = init_pda_account::<Config>(
         program_id,
-    );
-    invoke_signed(
-        &create_config_ix,
-        &[payer.clone(), config_account.clone(), system_program_account.clone()],
-        &[&[CONFIG_SEED, &[config_bump]]],
+        payer,
+        config_account,
+        system_program_account,
+        &expected_config,
+        &[CONFIG_SEED, &[config_bump]],
     )?;
 
     init_vault_pda(payer, pyth_fee_vault, system_program_account)?;
 
     let accrued_pyth_fees_lamports = pyth_fee_vault.lamports();
-    let mut config_data = config_account.data.borrow_mut();
-    let config = from_bytes_mut::<Config>(&mut config_data);
     *config = Config {
         discriminator: config_discriminator(),
         admin: args.admin,

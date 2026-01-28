@@ -1,12 +1,9 @@
-use bytemuck::{from_bytes_mut, try_from_bytes};
+use bytemuck::try_from_bytes;
 use solana_program::{
     account_info::{next_account_info, AccountInfo},
     entrypoint::ProgramResult,
-    program::invoke_signed,
     program_error::ProgramError,
     pubkey::Pubkey,
-    sysvar::{rent::Rent, Sysvar},
-    system_instruction,
     system_program,
 };
 
@@ -19,6 +16,7 @@ use crate::{
     pda::{config_pda, provider_pda, provider_vault_pda},
 };
 
+use super::pda_account::{init_pda_account, load_pda_account, load_pda_account_mut};
 use super::vault::init_vault_pda;
 
 pub fn process_register_provider(
@@ -76,57 +74,42 @@ pub fn process_register_provider(
         return Err(EntropyError::InvalidPda.into());
     }
 
-    if config_account.owner != program_id || config_account.data_len() != Config::LEN {
-        return Err(EntropyError::InvalidAccount.into());
-    }
-
-    let config_data = config_account.data.borrow();
-    let config = try_from_bytes::<Config>(&config_data)
-        .map_err(|_| ProgramError::InvalidAccountData)?;
-    if config.discriminator != config_discriminator() {
-        return Err(EntropyError::InvalidAccount.into());
-    }
+    let _config = load_pda_account::<Config>(
+        program_id,
+        config_account,
+        &expected_config,
+        config_discriminator(),
+    )?;
 
     let mut provider_created = false;
-    if provider_account.owner == &system_program::ID && provider_account.data_len() == 0 {
-        if provider_account.lamports() != 0 {
-            return Err(EntropyError::InvalidAccount.into());
-        }
-        let rent = Rent::get()?;
-        let provider_lamports = rent.minimum_balance(Provider::LEN);
-        let create_provider_ix = system_instruction::create_account(
-            provider_authority.key,
-            provider_account.key,
-            provider_lamports,
-            Provider::LEN as u64,
+    let mut provider = if provider_account.owner == &system_program::ID
+        && provider_account.data_len() == 0
+    {
+        provider_created = true;
+        init_pda_account::<Provider>(
             program_id,
-        );
-        invoke_signed(
-            &create_provider_ix,
+            provider_authority,
+            provider_account,
+            system_program_account,
+            &expected_provider,
             &[
-                provider_authority.clone(),
-                provider_account.clone(),
-                system_program_account.clone(),
-            ],
-            &[&[
                 PROVIDER_SEED,
                 provider_authority.key.as_ref(),
                 &[provider_bump],
-            ]],
-        )?;
-        provider_created = true;
-    } else if provider_account.owner != program_id || provider_account.data_len() != Provider::LEN {
-        return Err(EntropyError::InvalidAccount.into());
-    }
+            ],
+        )?
+    } else {
+        load_pda_account_mut::<Provider>(
+            program_id,
+            provider_account,
+            &expected_provider,
+            provider_discriminator(),
+        )?
+    };
 
     init_vault_pda(provider_authority, provider_vault, system_program_account)?;
 
-    let mut provider_data = provider_account.data.borrow_mut();
-    let provider = from_bytes_mut::<Provider>(&mut provider_data);
     if !provider_created {
-        if provider.discriminator != provider_discriminator() {
-            return Err(EntropyError::InvalidAccount.into());
-        }
         if provider.provider_authority != provider_authority.key.to_bytes() {
             return Err(EntropyError::InvalidAccount.into());
         }

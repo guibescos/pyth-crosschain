@@ -1,4 +1,5 @@
 mod initialize;
+mod pda_account;
 mod register_provider;
 mod vault;
 

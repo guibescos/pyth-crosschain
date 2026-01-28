@@ -2,6 +2,7 @@ use bytemuck::{from_bytes_mut, try_from_bytes};
 use solana_program::{
     account_info::{next_account_info, AccountInfo},
     entrypoint::ProgramResult,
+    program::invoke,
     program::invoke_signed,
     program_error::ProgramError,
     pubkey::Pubkey,
@@ -73,7 +74,7 @@ fn process_initialize(
         return Err(EntropyError::InvalidPda.into());
     }
 
-    let (expected_fee_vault, fee_vault_bump) = pyth_fee_vault_pda(program_id);
+    let (expected_fee_vault, _fee_vault_bump) = pyth_fee_vault_pda(program_id);
     if pyth_fee_vault.key != &expected_fee_vault {
         return Err(EntropyError::InvalidPda.into());
     }
@@ -101,23 +102,23 @@ fn process_initialize(
         &[&[CONFIG_SEED, &[config_bump]]],
     )?;
 
-    let vault_lamports = rent.minimum_balance(0);
-    let create_vault_ix = system_instruction::create_account(
-        payer.key,
-        pyth_fee_vault.key,
-        vault_lamports,
-        0,
-        &system_program::ID,
-    );
-    invoke_signed(
-        &create_vault_ix,
-        &[
-            payer.clone(),
-            pyth_fee_vault.clone(),
-            system_program_account.clone(),
-        ],
-        &[&[PYTH_FEE_VAULT_SEED, &[fee_vault_bump]]],
-    )?;
+    let required_vault_lamports = rent.minimum_balance(0);
+    let current_vault_lamports = pyth_fee_vault.lamports();
+    if current_vault_lamports < required_vault_lamports {
+        let transfer_ix = system_instruction::transfer(
+            payer.key,
+            pyth_fee_vault.key,
+            required_vault_lamports - current_vault_lamports,
+        );
+        invoke(
+            &transfer_ix,
+            &[
+                payer.clone(),
+                pyth_fee_vault.clone(),
+                system_program_account.clone(),
+            ],
+        )?;
+    }
 
     if config_account.owner != program_id || config_account.data_len() != Config::LEN {
         return Err(EntropyError::InvalidAccount.into());

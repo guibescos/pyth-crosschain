@@ -8,7 +8,7 @@ use solana_program::{account_info::AccountInfo, entrypoint::ProgramResult, pubke
 
 use self::{
     initialize::process_initialize, register_provider::process_register_provider,
-    request::process_request,
+    request::{process_request, process_request_with_callback},
 };
 use crate::{error::EntropyError, instruction::EntropyInstruction};
 
@@ -24,7 +24,9 @@ pub fn process_instruction(
             process_register_provider(program_id, accounts, payload)
         }
         EntropyInstruction::Request => process_request(program_id, accounts, payload),
-        EntropyInstruction::RequestWithCallback => Err(EntropyError::NotImplemented.into()),
+        EntropyInstruction::RequestWithCallback => {
+            process_request_with_callback(program_id, accounts, payload)
+        }
         EntropyInstruction::Reveal => Err(EntropyError::NotImplemented.into()),
         EntropyInstruction::RevealWithCallback => Err(EntropyError::NotImplemented.into()),
         EntropyInstruction::AdvanceProviderCommitment => Err(EntropyError::NotImplemented.into()),

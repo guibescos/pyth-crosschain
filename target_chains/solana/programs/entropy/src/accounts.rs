@@ -1,6 +1,5 @@
 use bytemuck::{Pod, Zeroable};
-use solana_sdk::program_error::ProgramError;
-
+use solana_program::program_error::ProgramError;
 use crate::constants::{
     CALLBACK_IX_DATA_LEN, COMMITMENT_METADATA_LEN, MAX_CALLBACK_ACCOUNTS, URI_LEN,
 };

@@ -117,7 +117,7 @@ pub fn process_request(program_id: &Pubkey, accounts: &[AccountInfo], data: &[u8
         return Err(EntropyError::OutOfRandomness.into());
     }
 
-    let provider_fee = provider.calculate_provider_fee(args.compute_unit_limit);
+    let provider_fee = provider.calculate_provider_fee(args.compute_unit_limit)?;
 
     if provider_fee > 0 {
         let transfer_ix = system_instruction::transfer(payer.key, provider_vault.key, provider_fee);

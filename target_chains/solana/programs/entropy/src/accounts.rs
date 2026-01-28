@@ -53,10 +53,10 @@ impl Provider {
     pub fn calculate_provider_fee(&self, compute_unit_limit: u32) -> u64 {
         let base_fee = self.fee_lamports;
         let default_limit = self.default_compute_unit_limit as u64;
-        let rounded_limit = round_up_to_10k(compute_unit_limit);
+        let limit = compute_unit_limit as u64;
 
-        if self.default_compute_unit_limit > 0 && rounded_limit > default_limit {
-            let extra_limit = rounded_limit.saturating_sub(default_limit);
+        if self.default_compute_unit_limit > 0 && limit > default_limit {
+            let extra_limit = limit.saturating_sub(default_limit);
             let additional_fee = extra_limit
                 .saturating_mul(base_fee)
                 .saturating_div(default_limit);
@@ -64,19 +64,6 @@ impl Provider {
         } else {
             base_fee
         }
-    }
-}
-
-fn round_up_to_10k(limit: u32) -> u64 {
-    let limit = limit as u64;
-    if limit == 0 {
-        return 0;
-    }
-    let remainder = limit % 10_000;
-    if remainder == 0 {
-        limit
-    } else {
-        limit + (10_000 - remainder)
     }
 }
 

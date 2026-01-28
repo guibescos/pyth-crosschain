@@ -74,3 +74,13 @@ pub struct RegisterProviderArgs {
     pub uri: [u8; URI_LEN],
     pub _padding1: [u8; 6],
 }
+
+#[derive(Clone, Copy, Pod, Zeroable)]
+#[repr(C)]
+pub struct RequestArgs {
+    pub provider: PubkeyBytes,
+    pub user_commitment: [u8; 32],
+    pub use_blockhash: u8,
+    pub _padding0: [u8; 3],
+    pub compute_unit_limit: u32,
+}

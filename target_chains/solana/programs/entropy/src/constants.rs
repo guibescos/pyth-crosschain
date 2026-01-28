@@ -19,6 +19,8 @@ pub const REQUEST_SEED: &[u8] = b"request";
 pub const PYTH_FEE_VAULT_SEED: &[u8] = b"pyth_fee_vault";
 /// Seed for the entropy signer PDA.
 pub const ENTROPY_SIGNER_SEED: &[u8] = b"entropy_signer";
+/// Seed for the requester signer PDA (owned by requester program).
+pub const REQUESTER_SIGNER_SEED: &[u8] = b"requester_signer";
 
 /// Callback status constants (mirror EntropyStatusConstants).
 pub const CALLBACK_NOT_NECESSARY: u8 = 0;

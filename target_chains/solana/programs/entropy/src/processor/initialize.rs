@@ -3,7 +3,6 @@ use solana_program::{
     account_info::{next_account_info, AccountInfo},
     entrypoint::ProgramResult,
     program::invoke,
-    program::invoke_signed,
     program_error::ProgramError,
     pubkey::Pubkey,
     system_instruction,
@@ -18,6 +17,7 @@ use crate::{
     error::EntropyError,
     instruction::InitializeArgs,
     pda::{config_pda, pyth_fee_vault_pda},
+    pda_init::initialize_pda_account,
 };
 
 pub fn process_initialize(
@@ -67,21 +67,16 @@ pub fn process_initialize(
         return Err(EntropyError::InvalidAccount.into());
     }
 
-    let rent = Rent::get()?;
-    let config_lamports = rent.minimum_balance(Config::LEN);
-    let create_config_ix = system_instruction::create_account(
-        payer.key,
-        config_account.key,
-        config_lamports,
-        Config::LEN as u64,
+    initialize_pda_account(
         program_id,
-    );
-    invoke_signed(
-        &create_config_ix,
-        &[payer.clone(), config_account.clone(), system_program_account.clone()],
-        &[&[CONFIG_SEED, &[config_bump]]],
+        payer,
+        config_account,
+        system_program_account,
+        &[CONFIG_SEED, &[config_bump]],
+        Config::LEN,
     )?;
 
+    let rent = Rent::get()?;
     let required_vault_lamports = rent.minimum_balance(0);
     let current_vault_lamports = pyth_fee_vault.lamports();
     if current_vault_lamports < required_vault_lamports {

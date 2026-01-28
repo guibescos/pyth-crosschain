@@ -3,7 +3,6 @@ use solana_program::{
     account_info::{next_account_info, AccountInfo},
     entrypoint::ProgramResult,
     program::invoke,
-    program::invoke_signed,
     program_error::ProgramError,
     pubkey::Pubkey,
     system_instruction,
@@ -18,6 +17,7 @@ use crate::{
     error::EntropyError,
     instruction::RegisterProviderArgs,
     pda::{config_pda, provider_pda, provider_vault_pda},
+    pda_init::initialize_pda_account,
 };
 
 pub fn process_register_provider(
@@ -88,30 +88,13 @@ pub fn process_register_provider(
 
     let mut provider_created = false;
     if provider_account.owner == &system_program::ID && provider_account.data_len() == 0 {
-        if provider_account.lamports() != 0 {
-            return Err(EntropyError::InvalidAccount.into());
-        }
-        let rent = Rent::get()?;
-        let provider_lamports = rent.minimum_balance(Provider::LEN);
-        let create_provider_ix = system_instruction::create_account(
-            provider_authority.key,
-            provider_account.key,
-            provider_lamports,
-            Provider::LEN as u64,
+        initialize_pda_account(
             program_id,
-        );
-        invoke_signed(
-            &create_provider_ix,
-            &[
-                provider_authority.clone(),
-                provider_account.clone(),
-                system_program_account.clone(),
-            ],
-            &[&[
-                PROVIDER_SEED,
-                provider_authority.key.as_ref(),
-                &[provider_bump],
-            ]],
+            provider_authority,
+            provider_account,
+            system_program_account,
+            &[PROVIDER_SEED, provider_authority.key.as_ref(), &[provider_bump]],
+            Provider::LEN,
         )?;
         provider_created = true;
     } else if provider_account.owner != program_id || provider_account.data_len() != Provider::LEN {
@@ -166,9 +149,9 @@ pub fn process_register_provider(
     provider.uri = args.uri;
 
     provider.end_sequence_number = provider
-    .sequence_number
-    .checked_add(args.chain_length)
-    .ok_or(ProgramError::InvalidArgument)?;
+        .sequence_number
+        .checked_add(args.chain_length)
+        .ok_or(ProgramError::InvalidArgument)?;
     provider.sequence_number += 1;
 
     provider.bump = provider_bump;

@@ -283,7 +283,7 @@ Accounts:
 - `[writable]` request PDA
 - `[writable]` provider PDA
 - `slot_hashes` sysvar (readonly)
-- `[signer]` entropy_signer (PDA of entropy program)
+- `[readonly]` entropy_signer (PDA of entropy program)
 - `[readonly]` callback_program (if callback required)
 - `callback accounts` (remaining accounts; must match stored `callback_accounts`)
 - `system_program` (for close)

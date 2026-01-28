@@ -2,13 +2,11 @@ use bytemuck::{from_bytes_mut, try_from_bytes};
 use solana_program::{
     account_info::{next_account_info, AccountInfo},
     entrypoint::ProgramResult,
-    program::invoke,
     program::invoke_signed,
     program_error::ProgramError,
     pubkey::Pubkey,
     system_instruction,
     system_program,
-    sysvar::{rent::Rent, Sysvar},
 };
 
 use crate::{
@@ -19,6 +17,8 @@ use crate::{
     instruction::RegisterProviderArgs,
     pda::{config_pda, provider_pda, provider_vault_pda},
 };
+
+use super::vault::init_vault_pda;
 
 pub fn process_register_provider(
     program_id: &Pubkey,
@@ -118,28 +118,7 @@ pub fn process_register_provider(
         return Err(EntropyError::InvalidAccount.into());
     }
 
-    if provider_vault.owner != &system_program::ID || provider_vault.data_len() != 0 {
-        return Err(EntropyError::InvalidAccount.into());
-    }
-
-    let rent = Rent::get()?;
-    let required_vault_lamports = rent.minimum_balance(0);
-    let current_vault_lamports = provider_vault.lamports();
-    if current_vault_lamports < required_vault_lamports {
-        let transfer_ix = system_instruction::transfer(
-            provider_authority.key,
-            provider_vault.key,
-            required_vault_lamports - current_vault_lamports,
-        );
-        invoke(
-            &transfer_ix,
-            &[
-                provider_authority.clone(),
-                provider_vault.clone(),
-                system_program_account.clone(),
-            ],
-        )?;
-    }
+    init_vault_pda(provider_authority, provider_vault, system_program_account)?;
 
     let mut provider_data = provider_account.data.borrow_mut();
     let provider = from_bytes_mut::<Provider>(&mut provider_data);

@@ -2,7 +2,6 @@ use bytemuck::{from_bytes_mut, try_from_bytes};
 use solana_program::{
     account_info::{next_account_info, AccountInfo},
     entrypoint::ProgramResult,
-    program::invoke,
     program::invoke_signed,
     program_error::ProgramError,
     pubkey::Pubkey,
@@ -19,6 +18,8 @@ use crate::{
     instruction::InitializeArgs,
     pda::{config_pda, pyth_fee_vault_pda},
 };
+
+use super::vault::init_vault_pda;
 
 pub fn process_initialize(
     program_id: &Pubkey,
@@ -63,10 +64,6 @@ pub fn process_initialize(
         return Err(EntropyError::InvalidAccount.into());
     }
 
-    if pyth_fee_vault.owner != &system_program::ID || pyth_fee_vault.data_len() != 0 {
-        return Err(EntropyError::InvalidAccount.into());
-    }
-
     let rent = Rent::get()?;
     let config_lamports = rent.minimum_balance(Config::LEN);
     let create_config_ix = system_instruction::create_account(
@@ -82,23 +79,7 @@ pub fn process_initialize(
         &[&[CONFIG_SEED, &[config_bump]]],
     )?;
 
-    let required_vault_lamports = rent.minimum_balance(0);
-    let current_vault_lamports = pyth_fee_vault.lamports();
-    if current_vault_lamports < required_vault_lamports {
-        let transfer_ix = system_instruction::transfer(
-            payer.key,
-            pyth_fee_vault.key,
-            required_vault_lamports - current_vault_lamports,
-        );
-        invoke(
-            &transfer_ix,
-            &[
-                payer.clone(),
-                pyth_fee_vault.clone(),
-                system_program_account.clone(),
-            ],
-        )?;
-    }
+    init_vault_pda(payer, pyth_fee_vault, system_program_account)?;
 
     let accrued_pyth_fees_lamports = pyth_fee_vault.lamports();
     let mut config_data = config_account.data.borrow_mut();

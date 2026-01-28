@@ -15,8 +15,7 @@ use solana_program::{
 use crate::{
     accounts::{CallbackMeta, Config, Provider, Request},
     constants::{
-        CALLBACK_NOT_NECESSARY, CALLBACK_IX_DATA_LEN, MAX_CALLBACK_ACCOUNTS,
-        REQUESTER_SIGNER_SEED,
+        CALLBACK_IX_DATA_LEN, CALLBACK_NOT_NECESSARY, MAX_CALLBACK_ACCOUNTS, REQUESTER_SIGNER_SEED,
     },
     discriminator::{config_discriminator, provider_discriminator, request_discriminator},
     error::EntropyError,
@@ -26,7 +25,11 @@ use crate::{
 
 use super::pda::{load_pda, load_pda_mut};
 
-pub fn process_request(program_id: &Pubkey, accounts: &[AccountInfo], data: &[u8]) -> ProgramResult {
+pub fn process_request(
+    program_id: &Pubkey,
+    accounts: &[AccountInfo],
+    data: &[u8],
+) -> ProgramResult {
     let args = parse_request_args(data)?;
 
     if args.use_blockhash > 1 {
@@ -112,27 +115,32 @@ pub fn process_request(program_id: &Pubkey, accounts: &[AccountInfo], data: &[u8
         return Err(EntropyError::InvalidAccount.into());
     }
 
+    // Assign a sequence number to the request
     let sequence_number = provider.sequence_number;
     if sequence_number >= provider.end_sequence_number {
         return Err(EntropyError::OutOfRandomness.into());
     }
+    provider.sequence_number = provider
+        .sequence_number
+        .checked_add(1)
+        .ok_or(ProgramError::InvalidArgument)?;
 
+    // Calculate and transfer fees
     let provider_fee = provider.calculate_provider_fee(args.compute_unit_limit)?;
-
     if provider_fee > 0 {
         let transfer_ix = system_instruction::transfer(payer.key, provider_vault.key, provider_fee);
         invoke(
             &transfer_ix,
-            &[payer.clone(), provider_vault.clone(), system_program_account.clone()],
+            &[
+                payer.clone(),
+                provider_vault.clone(),
+                system_program_account.clone(),
+            ],
         )?;
     }
-
     if config.pyth_fee_lamports > 0 {
-        let transfer_ix = system_instruction::transfer(
-            payer.key,
-            pyth_fee_vault.key,
-            config.pyth_fee_lamports,
-        );
+        let transfer_ix =
+            system_instruction::transfer(payer.key, pyth_fee_vault.key, config.pyth_fee_lamports);
         invoke(
             &transfer_ix,
             &[
@@ -143,23 +151,6 @@ pub fn process_request(program_id: &Pubkey, accounts: &[AccountInfo], data: &[u8
         )?;
     }
 
-    provider.sequence_number = provider
-        .sequence_number
-        .checked_add(1)
-        .ok_or(ProgramError::InvalidArgument)?;
-
-    let num_hashes = sequence_number
-        .checked_sub(provider.current_commitment_sequence_number)
-        .ok_or(ProgramError::InvalidArgument)?;
-    if provider.max_num_hashes != 0 && num_hashes > provider.max_num_hashes as u64 {
-        return Err(EntropyError::LastRevealedTooOld.into());
-    }
-    let num_hashes = u32::try_from(num_hashes).map_err(|_| ProgramError::InvalidArgument)?;
-
-    let commitment = hashv(&[&args.user_commitment, &provider.current_commitment]).to_bytes();
-
-    let request_slot = Clock::get()?.slot;
-
     let mut request = init_request_account_mut(
         program_id,
         payer,
@@ -168,36 +159,24 @@ pub fn process_request(program_id: &Pubkey, accounts: &[AccountInfo], data: &[u8
         Request::LEN,
     )?;
 
-    *request = Request {
-        discriminator: request_discriminator(),
-        provider: provider.provider_authority,
-        sequence_number,
-        num_hashes,
-        commitment,
-        _padding0: [0u8; 4],
-        request_slot,
-        requester_program_id: requester_program.key.to_bytes(),
-        requester_signer: requester_signer.key.to_bytes(),
-        payer: payer.key.to_bytes(),
-        use_blockhash: args.use_blockhash,
-        callback_status: CALLBACK_NOT_NECESSARY,
-        _padding1: [0u8; 2],
-        compute_unit_limit: 0,
-        callback_program_id: [0u8; 32],
-        callback_accounts_len: 0,
-        _padding2: [0u8; 1],
-        callback_accounts: [CallbackMeta {
-            pubkey: [0u8; 32],
-            is_signer: 0,
-            is_writable: 0,
-        }; MAX_CALLBACK_ACCOUNTS],
-        callback_ix_data_len: 0,
-        callback_ix_data: [0u8; CALLBACK_IX_DATA_LEN],
-        bump: 0,
-        _padding3: [0u8; 3],
-    };
+    request.provider = provider.provider_authority;
+    request.sequence_number = sequence_number;
 
-    drop(request);
+    let num_hashes = sequence_number
+        .checked_sub(provider.current_commitment_sequence_number)
+        .ok_or(ProgramError::InvalidArgument)?;
+    request.num_hashes = u32::try_from(num_hashes).map_err(|_| ProgramError::InvalidArgument)?;
+    if provider.max_num_hashes != 0 && request.num_hashes > provider.max_num_hashes {
+        return Err(EntropyError::LastRevealedTooOld.into());
+    }
+
+    request.commitment = hashv(&[&args.user_commitment, &provider.current_commitment]).to_bytes();
+    request.requester_program_id = requester_program.key.to_bytes();
+    request.request_slot = Clock::get()?.slot;
+    request.use_blockhash = args.use_blockhash;
+    request.callback_status = CALLBACK_NOT_NECESSARY;
+    request.compute_unit_limit = provider.default_compute_unit_limit;
+    request.discriminator = request_discriminator();
 
     // Return the assigned sequence number for CPI callers.
     set_return_data(&sequence_number.to_le_bytes());

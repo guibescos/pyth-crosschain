@@ -1,8 +1,8 @@
-use bytemuck::{Pod, Zeroable};
-use solana_program::program_error::ProgramError;
 use crate::constants::{
     CALLBACK_IX_DATA_LEN, COMMITMENT_METADATA_LEN, MAX_CALLBACK_ACCOUNTS, URI_LEN,
 };
+use bytemuck::{Pod, Zeroable};
+use solana_program::program_error::ProgramError;
 
 pub type PubkeyBytes = [u8; 32];
 
@@ -51,7 +51,9 @@ impl Provider {
     pub const LEN: usize = core::mem::size_of::<Self>();
 
     pub fn calculate_provider_fee(&self, compute_unit_limit: u32) -> Result<u64, ProgramError> {
-        if self.default_compute_unit_limit > 0 && compute_unit_limit > self.default_compute_unit_limit {
+        if self.default_compute_unit_limit > 0
+            && compute_unit_limit > self.default_compute_unit_limit
+        {
             let extra_limit = compute_unit_limit.saturating_sub(self.default_compute_unit_limit);
             let additional_fee = u64::from(extra_limit)
                 .checked_mul(self.fee_lamports)

@@ -5,7 +5,7 @@ use solana_program::{
     account_info::{next_account_info, AccountInfo},
     entrypoint::ProgramResult,
     hash::hashv,
-    program::invoke,
+    program::{invoke, set_return_data},
     program_error::ProgramError,
     pubkey::Pubkey,
     system_instruction, system_program,
@@ -198,6 +198,9 @@ pub fn process_request(program_id: &Pubkey, accounts: &[AccountInfo], data: &[u8
     };
 
     drop(request);
+
+    // Return the assigned sequence number for CPI callers.
+    set_return_data(&sequence_number.to_le_bytes());
 
     Ok(())
 }

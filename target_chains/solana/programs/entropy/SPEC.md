@@ -243,6 +243,8 @@ Behavior:
 - Compute `num_hashes = sequence_number - provider.current_commitment_sequence_number`.
 - If `max_num_hashes != 0` and `num_hashes > max_num_hashes`, error `LastRevealedTooOld`.
 - `commitment = sha256(user_commitment || provider.current_commitment)`.
+- Return data: set Solana return data to the assigned `sequence_number` as a little-endian `u64`
+  so CPI callers can read it via `get_return_data`.
 - Verify `requester_signer` is the PDA derived by `requester_program` using
   `seeds = ["requester_signer", entropy_program_id]` and the provided bump, and
   require it to sign (via CPI `invoke_signed` from the requester program).

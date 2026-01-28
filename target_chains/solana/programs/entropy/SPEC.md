@@ -227,7 +227,7 @@ Accounts:
 - `[writable, signer]` request account (new, uninitialized system account)
 - `[writable]` provider PDA
 - `[writable]` provider_vault PDA
-- `[writable]` config PDA
+- `[readonly]` config PDA
 - `[writable]` pyth_fee_vault PDA
 - `system_program`
 

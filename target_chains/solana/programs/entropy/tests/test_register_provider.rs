@@ -1,19 +1,13 @@
 use {
     bytemuck::{bytes_of, try_from_bytes},
-    entropy::{
-        accounts::Provider,
-        constants::{COMMITMENT_METADATA_LEN, URI_LEN},
-        discriminator::{config_discriminator, provider_discriminator},
-        error::EntropyError,
-        instruction::{EntropyInstruction, InitializeArgs, RegisterProviderArgs},
-        pda::{config_pda, provider_pda, provider_vault_pda},
+    entropy::{instruction::EntropyInstruction, accounts::Provider, constants::{COMMITMENT_METADATA_LEN, URI_LEN}, discriminator::{config_discriminator, provider_discriminator}, error::EntropyError, instruction::{RegisterProviderArgs, InitializeArgs}, pda::{config_pda, provider_pda, provider_vault_pda}
     },
     solana_program::{
         instruction::{AccountMeta, Instruction},
         pubkey::Pubkey,
         system_program,
     },
-    solana_program_test::{processor, ProgramTest},
+    solana_program_test::{ProgramTest, processor},
     solana_sdk::{
         account::Account,
         instruction::InstructionError,

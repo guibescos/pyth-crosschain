@@ -118,11 +118,8 @@ pub fn process_request(program_id: &Pubkey, accounts: &[AccountInfo], data: &[u8
         return Err(EntropyError::OutOfRandomness.into());
     }
 
-    let provider_fee = calculate_provider_fee(
-        provider.fee_lamports,
-        provider.default_compute_unit_limit,
-        args.compute_unit_limit,
-    )?;
+    let provider_fee = provider.calculate_provider_fee(args.compute_unit_limit);
+
     if provider_fee > 0 {
         let transfer_ix = system_instruction::transfer(payer.key, provider_vault.key, provider_fee);
         invoke(
@@ -212,47 +209,6 @@ fn parse_request_args(data: &[u8]) -> Result<&RequestArgs, ProgramError> {
     }
 
     try_from_bytes::<RequestArgs>(data).map_err(|_| ProgramError::InvalidInstructionData)
-}
-
-fn round_up_to_10k(limit: u32) -> u64 {
-    let limit = limit as u64;
-    if limit == 0 {
-        return 0;
-    }
-    let remainder = limit % 10_000;
-    if remainder == 0 {
-        limit
-    } else {
-        limit + (10_000 - remainder)
-    }
-}
-
-fn calculate_provider_fee(
-    base_fee: u64,
-    default_compute_unit_limit: u32,
-    compute_unit_limit: u32,
-) -> Result<u64, ProgramError> {
-    if default_compute_unit_limit == 0 {
-        return Ok(base_fee);
-    }
-
-    let rounded_limit = round_up_to_10k(compute_unit_limit);
-    let default_limit = default_compute_unit_limit as u64;
-    if rounded_limit <= default_limit {
-        return Ok(base_fee);
-    }
-
-    let extra = rounded_limit
-        .checked_sub(default_limit)
-        .ok_or(ProgramError::InvalidArgument)?
-        .checked_mul(base_fee)
-        .ok_or(ProgramError::InvalidArgument)?
-        .checked_div(default_limit)
-        .ok_or(ProgramError::InvalidArgument)?;
-
-    base_fee
-        .checked_add(extra)
-        .ok_or(ProgramError::InvalidArgument)
 }
 
 fn init_request_account_mut<'a, 'info>(

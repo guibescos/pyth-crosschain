@@ -8,18 +8,15 @@ use solana_program::{
 };
 
 use crate::{
-    accounts::{Config, Provider},
+    accounts::Provider,
     constants::PROVIDER_SEED,
-    discriminator::{config_discriminator, provider_discriminator},
+    discriminator::provider_discriminator,
     error::EntropyError,
     instruction::RegisterProviderArgs,
-    pda::{config_pda, provider_pda, provider_vault_pda},
+    pda::{provider_pda, provider_vault_pda},
 };
 
-use super::{
-    pda::{init_pda_mut, load_pda, load_pda_mut},
-    vault::init_vault_pda,
-};
+use super::{pda::init_pda_mut, pda::load_pda_mut, vault::init_vault_pda};
 
 pub fn process_register_provider(
     program_id: &Pubkey,
@@ -42,7 +39,6 @@ pub fn process_register_provider(
     let provider_authority = next_account_info(&mut account_info_iter)?;
     let provider_account = next_account_info(&mut account_info_iter)?;
     let provider_vault = next_account_info(&mut account_info_iter)?;
-    let config_account = next_account_info(&mut account_info_iter)?;
     let system_program_account = next_account_info(&mut account_info_iter)?;
 
     if !provider_authority.is_signer {
@@ -52,7 +48,6 @@ pub fn process_register_provider(
     if !provider_authority.is_writable
         || !provider_account.is_writable
         || !provider_vault.is_writable
-        || !config_account.is_writable
     {
         return Err(EntropyError::InvalidAccount.into());
     }
@@ -70,18 +65,6 @@ pub fn process_register_provider(
     if provider_vault.key != &expected_vault {
         return Err(EntropyError::InvalidPda.into());
     }
-
-    let (expected_config, _config_bump) = config_pda(program_id);
-    if config_account.key != &expected_config {
-        return Err(EntropyError::InvalidPda.into());
-    }
-
-    load_pda::<Config>(
-        config_account,
-        program_id,
-        Config::LEN,
-        config_discriminator(),
-    )?;
 
     let mut provider = if provider_account.owner == &system_program::ID {
         init_pda_mut::<Provider>(

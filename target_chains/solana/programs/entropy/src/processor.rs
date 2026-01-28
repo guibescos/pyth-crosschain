@@ -60,7 +60,7 @@ fn process_initialize(
         return Err(ProgramError::MissingRequiredSignature);
     }
 
-    if !config_account.is_writable || !pyth_fee_vault.is_writable {
+    if !payer.is_writable || !config_account.is_writable || !pyth_fee_vault.is_writable {
         return Err(EntropyError::InvalidAccount.into());
     }
 

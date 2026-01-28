@@ -147,56 +147,38 @@ pub fn process_register_provider(
         return Err(EntropyError::InvalidAccount.into());
     }
 
-    let (sequence_number, accrued_fees_lamports, fee_manager, max_num_hashes, default_compute_unit) =
-        if !provider_created {
-            let provider_data = provider_account.data.borrow();
-            let provider = try_from_bytes::<Provider>(&provider_data)
-                .map_err(|_| ProgramError::InvalidAccountData)?;
-            if provider.discriminator != provider_discriminator() {
-                return Err(EntropyError::InvalidAccount.into());
-            }
-            if provider.provider_authority != provider_authority.key.to_bytes() {
-                return Err(EntropyError::InvalidAccount.into());
-            }
-            (
-                provider.sequence_number,
-                provider.accrued_fees_lamports,
-                provider.fee_manager,
-                provider.max_num_hashes,
-                provider.default_compute_unit_limit,
-            )
-        } else {
-            (0, 0, [0u8; 32], 0, 0)
-        };
+    let mut provider_data = provider_account.data.borrow_mut();
+    let provider = from_bytes_mut::<Provider>(&mut provider_data);
+    if !provider_created {
+        if provider.discriminator != provider_discriminator() {
+            return Err(EntropyError::InvalidAccount.into());
+        }
+        if provider.provider_authority != provider_authority.key.to_bytes() {
+            return Err(EntropyError::InvalidAccount.into());
+        }
+    }
 
-    let end_sequence_number = sequence_number
+    let end_sequence_number = provider
+        .sequence_number
         .checked_add(args.chain_length)
         .ok_or(ProgramError::InvalidArgument)?;
 
-    let mut provider_data = provider_account.data.borrow_mut();
-    let provider = from_bytes_mut::<Provider>(&mut provider_data);
-    *provider = Provider {
-        discriminator: provider_discriminator(),
-        provider_authority: provider_authority.key.to_bytes(),
-        fee_lamports: args.fee_lamports,
-        accrued_fees_lamports,
-        original_commitment: args.commitment,
-        original_commitment_sequence_number: sequence_number,
-        commitment_metadata_len: args.commitment_metadata_len,
-        commitment_metadata: args.commitment_metadata,
-        uri_len: args.uri_len,
-        uri: args.uri,
-        _padding0: [0u8; 4],
-        end_sequence_number,
-        sequence_number: sequence_number + 1,
-        current_commitment: args.commitment,
-        current_commitment_sequence_number: sequence_number,
-        fee_manager,
-        max_num_hashes,
-        default_compute_unit_limit: default_compute_unit,
-        bump: provider_bump,
-        _padding1: [0u8; 7],
-    };
+    provider.discriminator = provider_discriminator();
+    provider.provider_authority = provider_authority.key.to_bytes();
+    provider.fee_lamports = args.fee_lamports;
+    provider.original_commitment = args.commitment;
+    provider.original_commitment_sequence_number = provider.sequence_number;
+    provider.commitment_metadata_len = args.commitment_metadata_len;
+    provider.commitment_metadata = args.commitment_metadata;
+    provider.uri_len = args.uri_len;
+    provider.uri = args.uri;
+    provider._padding0 = [0u8; 4];
+    provider.end_sequence_number = end_sequence_number;
+    provider.sequence_number = provider.sequence_number + 1;
+    provider.current_commitment = args.commitment;
+    provider.current_commitment_sequence_number = provider.sequence_number - 1;
+    provider.bump = provider_bump;
+    provider._padding1 = [0u8; 7];
 
     Ok(())
 }

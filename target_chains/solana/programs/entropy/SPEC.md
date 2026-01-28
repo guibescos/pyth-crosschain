@@ -25,7 +25,8 @@ Key differences driven by Solana:
 - Storage is explicit via PDAs instead of EVM mappings/arrays.
 - Fees are held in PDA-owned vault accounts and transferred via system instructions.
 - Callbacks are CPIs to the requester program (if provided). The request stores the callback program id
-  and optional account hash to bind the callback accounts.
+  and optional account hash to bind the callback accounts. Callback programs must authenticate the
+  caller via the `entropy_signer` PDA (not via `callback_program_id` alone).
 - "Gas limit" becomes a compute-unit limit hint (still stored for compatibility and fee calculation).
 - Blockhash use is implemented via Sysvar SlotHashes instead of EVM `blockhash`.
 
@@ -104,12 +105,21 @@ Notes:
 - Replaces `EntropyStructsV2.Request` + callback status.
 - The request account is created by the payer and closed on reveal; lamports returned to payer.
 - `callback_accounts_hash` is a sha256 of the metas supplied at request time to bind
-  callback accounts. If not used, enforce only that the requester_signer signs.
+  callback accounts. It does not authenticate the caller; callback programs must verify
+  `entropy_signer`. If not used, enforce only that the requester_signer signs.
 
 ### 2.5 Pyth fee vault
 PDA: `seeds = ["pyth_fee_vault"]`
 
 System account holding lamports that back `config.accrued_pyth_fees_lamports`.
+
+### 2.6 Entropy signer (program-derived signer)
+PDA: `seeds = ["entropy_signer"]`
+
+Signer PDA used by the entropy program when invoking callback programs. The program should sign CPI
+instructions with `invoke_signed` using `["entropy_signer", bump]`. Callback programs must verify that
+the provided `entropy_signer` account matches `find_program_address(["entropy_signer"], entropy_program_id)`
+and that it is a signer.
 
 ## 3. Status constants (mirror EntropyStatusConstants)
 
@@ -262,6 +272,7 @@ Accounts:
 - `[writable]` request PDA
 - `[writable]` provider PDA
 - `slot_hashes` sysvar (readonly)
+- `[signer]` entropy_signer (PDA of entropy program)
 - `[readonly]` callback_program (if callback required)
 - `callback accounts` (remaining accounts)
 - `system_program` (for close)
@@ -275,9 +286,13 @@ Args:
 Behavior:
 - `callback_status` must be `CALLBACK_NOT_STARTED` or `CALLBACK_FAILED`.
 - Verify commitment and compute random number.
+- `entropy_signer` must match `find_program_address(["entropy_signer"], entropy_program_id)` and
+  be a signer (via `invoke_signed`).
 - If `callback_program_id` is non-zero, CPI into callback program with
   (sequence_number, provider, random_number). Recommended: define a Solana entropy
-  callback interface for requesters.
+  callback interface for requesters. The CPI must be signed by `entropy_signer`
+  via `invoke_signed`. Callback programs should re-derive and verify `entropy_signer`
+  using the entropy program id they trust (or a passed-in entropy program account).
 - If CPI fails and status was NOT_STARTED, mark as CALLBACK_FAILED.
 - If CPI succeeds, close request account.
 

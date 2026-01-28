@@ -439,9 +439,9 @@ Ethereum logic (see `getProviderFee`):
 Solana mapping:
 - Replace gas limit with compute unit limit. `default_compute_unit_limit` behaves like EVM
   `defaultGasLimit`.
-- `rounded_limit = round_up_to_10k(compute_unit_limit)` (unit = 10k CU).
-- If `default_compute_unit_limit > 0` and `rounded_limit > default`,
-  `additional = (rounded_limit - default) * fee / default`.
+- Use the exact `compute_unit_limit` without 10k rounding.
+- If `default_compute_unit_limit > 0` and `compute_unit_limit > default`,
+  `additional = (compute_unit_limit - default) * fee / default`.
 
 ## 6. Hashing and randomness
 

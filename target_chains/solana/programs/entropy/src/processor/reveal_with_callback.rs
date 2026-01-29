@@ -101,8 +101,8 @@ pub fn process_reveal_with_callback(
         provider.current_commitment = args.provider_contribution;
     }
 
-    let callback_program_id = Pubkey::new_from_array(request.callback_program_id);
-    if callback_program_id != Pubkey::default() && callback_program.key != &callback_program_id {
+    let requester_program_id = Pubkey::new_from_array(request.requester_program_id);
+    if requester_program_id != Pubkey::default() && callback_program.key != &requester_program_id {
         return Err(EntropyError::InvalidAccount.into());
     }
 
@@ -125,7 +125,7 @@ pub fn process_reveal_with_callback(
     let request_provider_bytes = request.provider;
     let refund_pubkey = request.payer;
 
-    if callback_program_id != Pubkey::default() {
+    if requester_program_id != Pubkey::default() {
         let callback_ix = build_callback_ix(
             callback_program.key,
             callback_accounts,

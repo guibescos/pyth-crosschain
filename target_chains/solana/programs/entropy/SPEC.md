@@ -24,9 +24,9 @@ vaults.
 Key differences driven by Solana:
 - Storage is explicit via PDAs for program state; request accounts are client-provided signer accounts initialized by the entropy program (not PDAs).
 - Fees are held in PDA-owned vault accounts and transferred via system instructions.
-- Callbacks are CPIs to the requester program (if provided). The request stores the callback program id
+- Callbacks are CPIs to the requester program (if provided). The request stores the requester program id
   plus the full callback account metas and callback instruction data to replay at reveal. Callback programs must authenticate the
-  caller via the `entropy_signer` PDA (not via `callback_program_id` alone).
+  caller via the `entropy_signer` PDA (not via `requester_program_id` alone).
 - "Gas limit" becomes a compute-unit limit hint (still stored for compatibility and fee calculation).
 - Blockhash use is implemented via Sysvar SlotHashes instead of EVM `blockhash`.
 
@@ -112,7 +112,6 @@ Fields (fixed-size; use zero-copy/POD layout, no Borsh):
 - `callback_status: u8` (see Status Constants)
 - `_padding1: [u8; 2]` (reserved for alignment)
 - `compute_unit_limit: u32` (stored as hint; fee calc uses this)
-- `callback_program_id: Pubkey` (zero pubkey = no callback)
 - `callback_accounts_len: u8`
 - `_padding2: [u8; 1]` (reserved for alignment)
 - `callback_accounts: [CallbackMeta; MAX_CALLBACK_ACCOUNTS]`
@@ -290,7 +289,7 @@ Behavior:
 - `user_commitment = sha256(user_randomness)`; `use_blockhash = false`.
 - `callback_status = CALLBACK_NOT_STARTED`.
 - Store `compute_unit_limit` (if 0, use provider default at reveal/fee calc).
-- Store `callback_program_id` and copy the instruction Vecs into the fixed-size request fields:
+- Store `requester_program_id` and copy the instruction Vecs into the fixed-size request fields:
   - Enforce `callback_accounts.len <= MAX_CALLBACK_ACCOUNTS` and
     `callback_ix_data.len <= CALLBACK_IX_DATA_LEN`.
   - Set `callback_accounts_len` / `callback_ix_data_len` to the Vec lengths.
@@ -362,7 +361,7 @@ Behavior:
 - Verify commitment and compute random number.
 - `entropy_signer` must match `find_program_address(["entropy_signer"], entropy_program_id)` and
   be a signer (via `invoke_signed`).
-- If `callback_program_id` is non-zero, verify the remaining accounts match the stored
+- If `requester_program_id` is non-zero, verify the remaining accounts match the stored
   `callback_accounts` (pubkey + signer + writable). CPI into callback program with
   instruction data = `callback_ix_data || entropy_callback_payload`, where the payload
   encodes (sequence_number, provider, random_number). Recommended: define a Solana entropy

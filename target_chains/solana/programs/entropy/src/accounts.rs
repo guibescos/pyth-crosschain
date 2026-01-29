@@ -118,7 +118,6 @@ pub struct Request {
     pub callback_status: u8,
     pub _padding1: [u8; 2],
     pub compute_unit_limit: u32,
-    pub callback_program_id: PubkeyBytes,
     pub callback_accounts_len: u8,
     pub _padding2: [u8; 1],
     pub callback_accounts: [CallbackMeta; MAX_CALLBACK_ACCOUNTS],

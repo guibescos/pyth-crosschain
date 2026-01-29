@@ -27,6 +27,14 @@ pub fn process_request_with_callback(
     data: &[u8],
 ) -> ProgramResult {
     let args = parse_request_with_callback_args(data)?;
+    let entropy_program_id = program_id.to_bytes();
+    if args
+        .callback_accounts
+        .iter()
+        .any(|meta| meta.pubkey == entropy_program_id)
+    {
+        return Err(EntropyError::InvalidAccount.into());
+    }
 
     let mut account_info_iter = accounts.iter();
     let requester_signer = next_account_info(&mut account_info_iter)?;

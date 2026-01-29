@@ -1,6 +1,7 @@
 use bytemuck::try_from_bytes;
 use solana_program::{
     account_info::{next_account_info, AccountInfo},
+    compute_units::sol_remaining_compute_units,
     entrypoint::ProgramResult,
     hash::{hash, hashv},
     program::invoke_signed,
@@ -123,6 +124,7 @@ pub fn process_reveal_with_callback(
     let callback_ix_data = request.callback_ix_data;
     let request_sequence_number = request.sequence_number;
     let request_provider_bytes = request.provider;
+    let callback_compute_unit_limit = request.compute_unit_limit;
 
     if requester_program_id != Pubkey::default() {
         let callback_ix = build_callback_ix(
@@ -135,9 +137,17 @@ pub fn process_reveal_with_callback(
             random_number,
         )?;
 
+        let callback_compute_units_before = sol_remaining_compute_units();
         let bump_seed = [_bump];
         let signer_seeds: &[&[u8]] = &[ENTROPY_SIGNER_SEED, &bump_seed];
         invoke_signed(&callback_ix, callback_accounts, &[signer_seeds])?;
+        let callback_compute_units_after = sol_remaining_compute_units();
+        let callback_compute_units_spent =
+            callback_compute_units_before.saturating_sub(callback_compute_units_after);
+
+        if callback_compute_units_spent > u64::from(callback_compute_unit_limit) {
+            return Err(EntropyError::CallbackComputeUnitLimitExceeded.into());
+        }
     }
 
     if payer_account.key != &Pubkey::new_from_array(request.payer) || !payer_account.is_writable

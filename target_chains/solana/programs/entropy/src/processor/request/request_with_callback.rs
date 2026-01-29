@@ -168,9 +168,6 @@ fn parse_request_with_callback_args<'a>(
         .map_err(|_| ProgramError::InvalidInstructionData)?;
 
     let callback_accounts_len = header.callback_accounts_len as usize;
-    if callback_accounts_len > MAX_CALLBACK_ACCOUNTS {
-        return Err(ProgramError::InvalidInstructionData);
-    }
 
     let callback_accounts_bytes_len = callback_accounts_len
         .checked_mul(CallbackMeta::LEN)
@@ -191,9 +188,6 @@ fn parse_request_with_callback_args<'a>(
     let (callback_ix_len_bytes, rest) = rest.split_at(4);
     let callback_ix_data_len = *try_from_bytes::<u32>(callback_ix_len_bytes)
         .map_err(|_| ProgramError::InvalidInstructionData)? as usize;
-    if callback_ix_data_len > CALLBACK_IX_DATA_LEN {
-        return Err(ProgramError::InvalidInstructionData);
-    }
 
     if rest.len() != callback_ix_data_len {
         return Err(ProgramError::InvalidInstructionData);

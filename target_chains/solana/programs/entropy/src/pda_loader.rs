@@ -10,41 +10,37 @@ use solana_program::{
     sysvar::{rent::Rent, Sysvar},
 };
 
-use crate::error::EntropyError;
+use crate::{accounts::Account, error::EntropyError};
 
-pub fn load_account<'a, T: bytemuck::Pod>(
+pub fn load_account<'a, T: Account>(
     account: &'a AccountInfo,
     program_id: &Pubkey,
-    expected_len: usize,
-    expected_discriminator: [u8; 8],
 ) -> Result<Ref<'a, T>, ProgramError> {
-    if account.owner != program_id || account.data_len() != expected_len {
+    if account.owner != program_id || account.data_len() != T::LEN {
         return Err(EntropyError::InvalidAccount.into());
     }
 
     let data = account.data.borrow();
     let discriminator = data.get(0..8).ok_or(ProgramError::InvalidAccountData)?;
-    if discriminator != expected_discriminator {
+    if discriminator != T::discriminator() {
         return Err(EntropyError::InvalidAccount.into());
     }
 
     Ok(Ref::map(data, |data| bytemuck::from_bytes::<T>(data)))
 }
 
-pub fn load_account_mut<'a, 'info, T: bytemuck::Pod>(
+pub fn load_account_mut<'a, 'info, T: Account>(
     account: &'a AccountInfo<'info>,
     program_id: &Pubkey,
-    expected_len: usize,
-    expected_discriminator: [u8; 8],
 ) -> Result<RefMut<'a, T>, ProgramError> {
-    if account.owner != program_id || account.data_len() != expected_len {
+    if account.owner != program_id || account.data_len() != T::LEN {
         return Err(EntropyError::InvalidAccount.into());
     }
 
     {
         let data = account.data.borrow();
         let discriminator = data.get(0..8).ok_or(ProgramError::InvalidAccountData)?;
-        if discriminator != expected_discriminator {
+        if discriminator != T::discriminator() {
             return Err(EntropyError::InvalidAccount.into());
         }
     }

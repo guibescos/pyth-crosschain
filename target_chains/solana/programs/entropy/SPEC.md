@@ -361,12 +361,16 @@ Behavior:
 - Verify commitment and compute random number.
 - `entropy_signer` must match `find_program_address(["entropy_signer"], entropy_program_id)` and
   be a signer (via `invoke_signed`).
-- If `requester_program_id` is non-zero, verify the remaining accounts match the stored
-  `callback_accounts` (pubkey + signer + writable). CPI into callback program with
-  instruction data = `callback_ix_data || entropy_callback_payload`, where the payload
-  encodes (sequence_number, provider, random_number). Recommended: define a Solana entropy
+- Verify `callback_program` matches `requester_program_id` and the remaining accounts match
+  the stored `callback_accounts` (pubkey + signer + writable).
+- CPI into callback program with instruction data =
+  `callback_ix_data || entropy_callback_payload`, where the payload encodes
+  (sequence_number, provider, random_number). Recommended: define a Solana entropy
   callback interface for requesters.
-- If CPI fails and status was NOT_STARTED, mark as CALLBACK_FAILED.
+- If `compute_unit_limit != 0` and `callback_status == CALLBACK_NOT_STARTED`, invoke the
+  callback in a failure-tolerant mode: if CPI fails, set `callback_status = CALLBACK_FAILED`
+  and return.
+- Otherwise, invoke the callback directly (errors bubble).
 - If CPI succeeds, close request account.
 
 ### 4.7 Advance provider commitment

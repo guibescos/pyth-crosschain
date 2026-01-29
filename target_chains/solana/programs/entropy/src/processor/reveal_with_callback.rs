@@ -102,7 +102,7 @@ pub fn process_reveal_with_callback(
     }
 
     let requester_program_id = Pubkey::new_from_array(request.requester_program_id);
-    if requester_program_id != Pubkey::default() && callback_program.key != &requester_program_id {
+    if requester_program_id == Pubkey::default() || callback_program.key != &requester_program_id {
         return Err(EntropyError::InvalidAccount.into());
     }
 
@@ -125,27 +125,30 @@ pub fn process_reveal_with_callback(
     let request_provider_bytes = request.provider;
     let refund_pubkey = request.payer;
 
-    if requester_program_id != Pubkey::default() {
-        let callback_ix = build_callback_ix(
-            callback_program.key,
-            callback_accounts,
-            callback_ix_data_len,
-            &callback_ix_data,
-            request_sequence_number,
-            request_provider_bytes,
-            random_number,
-        )?;
+    let callback_ix = build_callback_ix(
+        callback_program.key,
+        callback_accounts,
+        callback_ix_data_len,
+        &callback_ix_data,
+        request_sequence_number,
+        request_provider_bytes,
+        random_number,
+    )?;
 
-        let bump_seed = [_bump];
-        let signer_seeds: &[&[u8]] = &[ENTROPY_SIGNER_SEED, &bump_seed];
+    let bump_seed = [_bump];
+    let signer_seeds: &[&[u8]] = &[ENTROPY_SIGNER_SEED, &bump_seed];
+    let use_safe_callback =
+        request.compute_unit_limit != 0 && request.callback_status == CALLBACK_NOT_STARTED;
+
+    if use_safe_callback {
         let invoke_result = invoke_signed(&callback_ix, callback_accounts, &[signer_seeds]);
-
-        if invoke_result.is_err() && request.callback_status == CALLBACK_NOT_STARTED {
+        if invoke_result.is_err() {
             request.callback_status = CALLBACK_FAILED;
             return Ok(());
         }
-
         invoke_result?;
+    } else {
+        invoke_signed(&callback_ix, callback_accounts, &[signer_seeds])?;
     }
 
     let refund_account = extra_accounts.get(0).ok_or(EntropyError::InvalidAccount)?;

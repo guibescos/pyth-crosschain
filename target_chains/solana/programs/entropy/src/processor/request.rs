@@ -104,6 +104,42 @@ pub fn process_request(
         return Err(EntropyError::InvalidAccount.into());
     }
 
+    let _sequence_number = request_helper(
+        program_id,
+        &args,
+        &config,
+        &mut provider,
+        payer,
+        requester_program,
+        request_account,
+        provider_vault,
+        pyth_fee_vault,
+        system_program_account,
+    )?;
+
+    Ok(())
+}
+
+fn parse_request_args(data: &[u8]) -> Result<&RequestArgs, ProgramError> {
+    if data.len() != core::mem::size_of::<RequestArgs>() {
+        return Err(ProgramError::InvalidInstructionData);
+    }
+
+    try_from_bytes::<RequestArgs>(data).map_err(|_| ProgramError::InvalidInstructionData)
+}
+
+fn request_helper(
+    program_id: &Pubkey,
+    args: &RequestArgs,
+    config: &Config,
+    provider: &mut Provider,
+    payer: &AccountInfo,
+    requester_program: &AccountInfo,
+    request_account: &AccountInfo,
+    provider_vault: &AccountInfo,
+    pyth_fee_vault: &AccountInfo,
+    system_program_account: &AccountInfo,
+) -> Result<u64, ProgramError> {
     // Assign a sequence number to the request
     let sequence_number = provider.sequence_number;
     if sequence_number >= provider.end_sequence_number {
@@ -171,15 +207,7 @@ pub fn process_request(
     // Return the assigned sequence number for CPI callers.
     set_return_data(&sequence_number.to_le_bytes());
 
-    Ok(())
-}
-
-fn parse_request_args(data: &[u8]) -> Result<&RequestArgs, ProgramError> {
-    if data.len() != core::mem::size_of::<RequestArgs>() {
-        return Err(ProgramError::InvalidInstructionData);
-    }
-
-    try_from_bytes::<RequestArgs>(data).map_err(|_| ProgramError::InvalidInstructionData)
+    Ok(sequence_number)
 }
 
 fn init_request_account_mut<'a, 'info>(

@@ -138,7 +138,7 @@ Notes:
   Unused trailing bytes in the fixed-size arrays are ignored and SHOULD be zero-filled.
 - Current `Request` implementation only populates `provider`, `sequence_number`, `num_hashes`,
   `commitment`, `requester_program_id`, `request_slot`, `use_blockhash`, `callback_status`,
-  `compute_unit_limit`, and `discriminator`. Remaining fields are left as zeroed bytes.
+  `compute_unit_limit`, `payer`, and `discriminator`. Remaining fields are left as zeroed bytes.
 
 
 
@@ -248,7 +248,8 @@ Behavior:
 - Verify `requester_signer` is the PDA derived by `requester_program` using
   `seeds = ["requester_signer", entropy_program_id]`, and require it to sign
   (via CPI `invoke_signed` from the requester program).
-- Require `provider_vault` and `pyth_fee_vault` to be system-owned with zero data.
+- Require `config` and vault PDAs (`provider_vault`, `pyth_fee_vault`) to match the program-derived
+  addresses; the vaults must be system-owned with zero data.
 - Use `system_program::create_account` to initialize the request account, funded by the payer,
   and assign it to the entropy program. The request account must be a signer, writable, and
   system-owned prior to creation. If the request account is pre-funded, the program will
@@ -258,55 +259,19 @@ Behavior:
 - Reject `use_blockhash` values other than `0` or `1`.
 - Record `request_slot`, `requester_program_id`, `use_blockhash` and `payer`.
 - `callback_status = CALLBACK_NOT_NECESSARY`.
-- Store `compute_unit_limit = provider.default_compute_unit_limit` (current implementation).
-- Fee: `required_fee = provider_fee + config.pyth_fee_lamports` where provider_fee scales
-  by `compute_unit_limit` when `default_compute_unit_limit > 0` (see Fee Calculation).
-- Transfer lamports from payer to provider_vault and pyth_fee_vault.
+- Fee: `provider_fee = provider.calculate_provider_fee(compute_unit_limit)` where the provider fee
+  scales when `default_compute_unit_limit > 0` and the provided limit exceeds the default.
+  Then transfer `provider_fee` and `config.pyth_fee_lamports` from the payer into the
+  provider and pyth fee vaults (if non-zero).
+- Store `compute_unit_limit = provider.default_compute_unit_limit` (current implementation; the
+  request does not persist the caller-provided value).
 
 ### 4.4 Request with callback (V2)
-Mirrors `requestV2` and `requestWithCallback` in EVM.
+Not implemented.
 
-Accounts:
-- Same as Request + `callback_program` (readonly) + any callback accounts (readonly or writable).
-
-Args:
-- `provider: Pubkey`
-- `user_randomness: [u8; 32]` (or none if using program PRNG)
-- `compute_unit_limit: u32` (0 means provider default)
-- `callback_accounts: Vec<CallbackMeta>`
-- `callback_ix_data: Vec<u8>` (prefix bytes for the callback instruction)
-
-Instruction data encoding (request with callback):
-- `Vec<T>` is encoded as a little-endian `u32` length prefix followed by each element.
-- `CallbackMeta` in instruction data is `{ pubkey: [u8; 32], is_signer: u8, is_writable: u8 }`
-  with booleans encoded as `0`/`1` bytes, in that field order.
-- `Vec<u8>` is encoded as `u32` length + raw bytes (the prefix).
-
-Behavior:
-- For requestV2 convenience, generate `user_randomness` via PRNG seeded from config.seed,
-  current slot, recent blockhash, and requester_signer. Store back into config.seed.
-- `user_commitment = sha256(user_randomness)`; `use_blockhash = false`.
-- `callback_status = CALLBACK_NOT_STARTED`.
-- Store `compute_unit_limit` (if 0, use provider default at reveal/fee calc).
-- Store `requester_program_id` and copy the instruction Vecs into the fixed-size request fields:
-  - Enforce `callback_accounts.len <= MAX_CALLBACK_ACCOUNTS` and
-    `callback_ix_data.len <= CALLBACK_IX_DATA_LEN`.
-  - Set `callback_accounts_len` / `callback_ix_data_len` to the Vec lengths.
-  - Copy the Vec contents into `callback_accounts` / `callback_ix_data`.
-  - Zero-fill (or ignore) any remaining bytes in the fixed-size arrays.
-
-Example (pseudocode):
-```
-require(callback_accounts.len <= MAX_CALLBACK_ACCOUNTS);
-request.callback_accounts_len = callback_accounts.len as u8;
-request.callback_accounts[0..len] = callback_accounts;
-zero_fill(request.callback_accounts[len..]);
-
-require(callback_ix_data.len <= CALLBACK_IX_DATA_LEN);
-request.callback_ix_data_len = callback_ix_data.len as u16;
-request.callback_ix_data[0..len] = callback_ix_data;
-zero_fill(request.callback_ix_data[len..]);
-```
+Current behavior:
+- The instruction discriminator exists (`RequestWithCallback = 3`), but the processor returns
+  `EntropyError::NotImplemented` with no account validation or state changes.
 
 ### 4.5 Reveal (no callback)
 Mirrors `reveal` in EVM.

@@ -24,121 +24,20 @@ use crate::{
     pda_loader::{load_account, load_account_mut},
 };
 
-pub fn process_request(
-    program_id: &Pubkey,
-    accounts: &[AccountInfo],
-    data: &[u8],
-) -> ProgramResult {
-    let args = parse_request_args(data)?;
+mod request;
+pub use request::process_request;
 
-    if args.use_blockhash > 1 {
-        return Err(ProgramError::InvalidInstructionData);
-    }
-
-    let mut account_info_iter = accounts.iter();
-    let requester_signer = next_account_info(&mut account_info_iter)?;
-    let payer = next_account_info(&mut account_info_iter)?;
-    let requester_program = next_account_info(&mut account_info_iter)?;
-    let request_account = next_account_info(&mut account_info_iter)?;
-    let provider_account = next_account_info(&mut account_info_iter)?;
-    let provider_vault = next_account_info(&mut account_info_iter)?;
-    let config_account = next_account_info(&mut account_info_iter)?;
-    let pyth_fee_vault = next_account_info(&mut account_info_iter)?;
-    let system_program_account = next_account_info(&mut account_info_iter)?;
-
-    if !requester_signer.is_signer || !payer.is_signer || !request_account.is_signer {
-        return Err(ProgramError::MissingRequiredSignature);
-    }
-
-    if !payer.is_writable
-        || !request_account.is_writable
-        || !provider_account.is_writable
-        || !provider_vault.is_writable
-        || !pyth_fee_vault.is_writable
-    {
-        return Err(EntropyError::InvalidAccount.into());
-    }
-
-    if system_program_account.key != &system_program::ID {
-        return Err(EntropyError::InvalidAccount.into());
-    }
-
-    let requester_signer_seed = [REQUESTER_SIGNER_SEED, program_id.as_ref()];
-    let (expected_requester_signer, _bump) =
-        Pubkey::find_program_address(&requester_signer_seed, requester_program.key);
-    if requester_signer.key != &expected_requester_signer {
-        return Err(EntropyError::InvalidPda.into());
-    }
-
-    let (expected_config, _config_bump) = config_pda(program_id);
-    if config_account.key != &expected_config {
-        return Err(EntropyError::InvalidPda.into());
-    }
-
-    let (expected_pyth_fee_vault, _pyth_fee_vault_bump) = pyth_fee_vault_pda(program_id);
-    if pyth_fee_vault.key != &expected_pyth_fee_vault {
-        return Err(EntropyError::InvalidPda.into());
-    }
-    if pyth_fee_vault.owner != &system_program::ID || pyth_fee_vault.data_len() != 0 {
-        return Err(EntropyError::InvalidAccount.into());
-    }
-
-    if request_account.owner != &system_program::ID || request_account.data_len() != 0 {
-        return Err(EntropyError::InvalidAccount.into());
-    }
-
-    let config = load_account::<Config>(config_account, program_id)?;
-    let mut provider = load_account_mut::<Provider>(provider_account, program_id)?;
-    let provider_authority = Pubkey::new_from_array(provider.provider_authority);
-    let (expected_provider, _provider_bump) = provider_pda(program_id, &provider_authority);
-    if provider_account.key != &expected_provider {
-        return Err(EntropyError::InvalidPda.into());
-    }
-
-    let (expected_provider_vault, _provider_vault_bump) =
-        provider_vault_pda(program_id, &provider_authority);
-    if provider_vault.key != &expected_provider_vault {
-        return Err(EntropyError::InvalidPda.into());
-    }
-    if provider_vault.owner != &system_program::ID || provider_vault.data_len() != 0 {
-        return Err(EntropyError::InvalidAccount.into());
-    }
-
-    let _sequence_number = request_helper(
-        program_id,
-        &args,
-        &config,
-        &mut provider,
-        payer,
-        requester_program,
-        request_account,
-        provider_vault,
-        pyth_fee_vault,
-        system_program_account,
-    )?;
-
-    Ok(())
-}
-
-fn parse_request_args(data: &[u8]) -> Result<&RequestArgs, ProgramError> {
-    if data.len() != core::mem::size_of::<RequestArgs>() {
-        return Err(ProgramError::InvalidInstructionData);
-    }
-
-    try_from_bytes::<RequestArgs>(data).map_err(|_| ProgramError::InvalidInstructionData)
-}
-
-fn request_helper(
+fn request_helper<'a, 'info>(
     program_id: &Pubkey,
     args: &RequestArgs,
     config: &Config,
     provider: &mut Provider,
-    payer: &AccountInfo,
-    requester_program: &AccountInfo,
-    request_account: &AccountInfo,
-    provider_vault: &AccountInfo,
-    pyth_fee_vault: &AccountInfo,
-    system_program_account: &AccountInfo,
+    payer: &'a AccountInfo<'info>,
+    requester_program: &'a AccountInfo<'info>,
+    request_account: &'a AccountInfo<'info>,
+    provider_vault: &'a AccountInfo<'info>,
+    pyth_fee_vault: &'a AccountInfo<'info>,
+    system_program_account: &'a AccountInfo<'info>,
 ) -> Result<u64, ProgramError> {
     // Assign a sequence number to the request
     let sequence_number = provider.sequence_number;
@@ -207,9 +106,6 @@ fn request_helper(
     };
     request.payer = payer.key.to_bytes();
     request.discriminator = request_discriminator();
-
-    // Return the assigned sequence number for CPI callers.
-    set_return_data(&sequence_number.to_le_bytes());
 
     Ok(sequence_number)
 }

@@ -23,7 +23,7 @@ use crate::{
     pda::{config_pda, provider_pda, provider_vault_pda, pyth_fee_vault_pda},
 };
 
-use super::pda::{load_pda, load_pda_mut};
+use crate::utils::pda::{load_pda, load_pda_mut};
 
 pub fn process_request(
     program_id: &Pubkey,

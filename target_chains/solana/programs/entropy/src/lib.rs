@@ -8,6 +8,7 @@ pub mod error;
 pub mod instruction;
 pub mod pda;
 pub mod processor;
+pub mod utils;
 
 pub use accounts::*;
 pub use constants::*;

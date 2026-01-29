@@ -103,7 +103,8 @@ async fn test_register_provider_rotation_updates_commitment_and_sequence() {
     let (provider_address, _) = provider_pda(&program_id, &payer.pubkey());
     let (provider_vault, _) = provider_vault_pda(&program_id, &payer.pubkey());
     let first_commitment = [1u8; 32];
-    let first_args = build_register_args_with_metadata(10, first_commitment, 3, b"meta-1", b"uri-1");
+    let first_args =
+        build_register_args_with_metadata(10, first_commitment, 3, b"meta-1", b"uri-1");
     let instruction = build_register_provider_ix(
         program_id,
         payer.pubkey(),
@@ -127,7 +128,8 @@ async fn test_register_provider_rotation_updates_commitment_and_sequence() {
         .unwrap();
 
     let second_commitment = [9u8; 32];
-    let second_args = build_register_args_with_metadata(55, second_commitment, 4, b"meta-2", b"uri-2");
+    let second_args =
+        build_register_args_with_metadata(55, second_commitment, 4, b"meta-2", b"uri-2");
     let instruction = build_register_provider_ix(
         program_id,
         payer.pubkey(),

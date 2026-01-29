@@ -1,8 +1,6 @@
 mod initialize;
-mod pda;
 mod register_provider;
 mod request;
-mod vault;
 
 use solana_program::{account_info::AccountInfo, entrypoint::ProgramResult, pubkey::Pubkey};
 

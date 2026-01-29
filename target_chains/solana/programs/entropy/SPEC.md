@@ -138,7 +138,7 @@ Notes:
   Unused trailing bytes in the fixed-size arrays are ignored and SHOULD be zero-filled.
 - Current `Request` implementation only populates `provider`, `sequence_number`, `num_hashes`,
   `commitment`, `requester_program_id`, `request_slot`, `use_blockhash`, `callback_status`,
-  `compute_unit_limit`, and `discriminator`. Remaining fields are left as zeroed bytes.
+  `compute_unit_limit`, `payer`, and `discriminator`. Remaining fields are left as zeroed bytes.
 
 
 
@@ -258,9 +258,10 @@ Behavior:
 - Reject `use_blockhash` values other than `0` or `1`.
 - Record `request_slot`, `requester_program_id`, `use_blockhash` and `payer`.
 - `callback_status = CALLBACK_NOT_NECESSARY`.
-- Store `compute_unit_limit = provider.default_compute_unit_limit` (current implementation).
-- Fee: `required_fee = provider_fee + config.pyth_fee_lamports` where provider_fee scales
-  by `compute_unit_limit` when `default_compute_unit_limit > 0` (see Fee Calculation).
+- Store `compute_unit_limit = max(args.compute_unit_limit, provider.default_compute_unit_limit)`.
+- Fee: `required_fee = provider_fee(args.compute_unit_limit) + config.pyth_fee_lamports` where
+  provider_fee scales by `compute_unit_limit` when `default_compute_unit_limit > 0`
+  (see Fee Calculation).
 - Transfer lamports from payer to provider_vault and pyth_fee_vault.
 
 ### 4.4 Request with callback (V2)
@@ -347,7 +348,7 @@ Accounts:
 - `[readonly]` entropy_signer (PDA of entropy program)
 - `[readonly]` callback_program (if callback required)
 - `system_program` (for close)
-- `[writable]` payer (must match request.payer; must be non-signer)
+- `[writable]` payer (must match request.payer)
 - `callback accounts` (remaining accounts; must match stored `callback_accounts`)
 
 Args:
@@ -360,13 +361,17 @@ Behavior:
 - `callback_status` must be `CALLBACK_NOT_STARTED`.
 - Verify commitment and compute random number.
 - `entropy_signer` must match `find_program_address(["entropy_signer"], entropy_program_id)` and
-  be a signer (via `invoke_signed`).
-- If `requester_program_id` is non-zero, verify the remaining accounts match the stored
-  `callback_accounts` (pubkey + signer + writable). CPI into callback program with
-  instruction data = `callback_ix_data || entropy_callback_payload`, where the payload
-  encodes (sequence_number, provider, random_number). Recommended: define a Solana entropy
-  callback interface for requesters.
-- If CPI succeeds, close request account.
+  is used as the signing PDA for the CPI.
+- If `requester_program_id` is non-zero, `callback_program` must equal it; otherwise the
+  program accepts any callback program id.
+- Verify the remaining accounts match the stored `callback_accounts` (pubkey + signer + writable).
+- If `compute_unit_limit != 0`, CPI into the callback program with instruction data
+  `callback_ix_data || entropy_callback_payload`, where the payload encodes
+  `(sequence_number, provider, random_number)`. The CPI is invoked with `invoke_signed`
+  using the entropy signer PDA seeds; if the callback wants the entropy signer as an
+  account, it must be included in the stored `callback_accounts`.
+- After CPI, compute the compute units spent and error with `InsufficientGas` if it exceeds
+  `compute_unit_limit`. The request account is closed on success.
 
 ### 4.7 Advance provider commitment
 Mirrors `advanceProviderCommitment` in EVM.

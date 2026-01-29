@@ -348,8 +348,9 @@ Accounts:
 - `slot_hashes` sysvar (readonly)
 - `[readonly]` entropy_signer (PDA of entropy program)
 - `[readonly]` callback_program (if callback required)
-- `callback accounts` (remaining accounts; must match stored `callback_accounts`)
+- `[writable]` payer (refund destination)
 - `system_program` (for close)
+- `callback accounts` (remaining accounts; must match stored `callback_accounts`)
 
 Args:
 - `provider: Pubkey`
@@ -369,6 +370,7 @@ Behavior:
   callback interface for requesters.
 - If CPI fails and status was NOT_STARTED, mark as CALLBACK_FAILED.
 - If CPI succeeds, close request account.
+- Close refunds lamports to `payer` (must match `request.payer`).
 
 ### 4.7 Advance provider commitment
 Mirrors `advanceProviderCommitment` in EVM.

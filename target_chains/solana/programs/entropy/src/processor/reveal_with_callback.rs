@@ -13,14 +13,9 @@ use solana_program::{
 use std::cell::RefMut;
 
 use crate::{
-    accounts::{Provider, Request},
-    constants::{
+    accounts::{Provider, Request}, constants::{
         CALLBACK_NOT_STARTED, ENTROPY_SIGNER_SEED, MAX_CALLBACK_ACCOUNTS,
-    },
-    error::EntropyError,
-    instruction::RevealArgs,
-    pda::{entropy_signer_pda, provider_pda},
-    pda_loader::load_account_mut,
+    }, error::EntropyError, instruction::RevealArgs, load_account, pda::{entropy_signer_pda, provider_pda}, pda_loader::load_account_mut
 };
 
 pub fn process_reveal_with_callback(
@@ -56,7 +51,7 @@ pub fn process_reveal_with_callback(
         return Err(EntropyError::InvalidPda.into());
     }
 
-    let mut request = load_account_mut::<Request>(request_account, program_id)?;
+    let request = load_account::<Request>(request_account, program_id)?;
 
     if request.callback_status != CALLBACK_NOT_STARTED {
         return Err(EntropyError::InvalidRevealCall.into());

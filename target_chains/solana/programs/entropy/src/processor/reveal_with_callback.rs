@@ -117,7 +117,7 @@ pub fn process_reveal_with_callback(
         return Err(EntropyError::InvalidAccount.into());
     }
 
-    let (callback_accounts, _extra_accounts) = remaining_accounts.split_at(callback_accounts_len);
+    let (callback_accounts, _) = remaining_accounts.split_at(callback_accounts_len);
     validate_callback_accounts(&request, callback_accounts)?;
 
     let callback_ix_data_len = request.callback_ix_data_len;

@@ -35,7 +35,6 @@ pub fn process_reveal_with_callback(
     let provider_account = next_account_info(&mut account_info_iter)?;
     let slot_hashes_account = next_account_info(&mut account_info_iter)?;
     let entropy_signer_account = next_account_info(&mut account_info_iter)?;
-    let callback_program = next_account_info(&mut account_info_iter)?;
     let system_program_account = next_account_info(&mut account_info_iter)?;
     let payer_account = next_account_info(&mut account_info_iter)?;
 
@@ -103,21 +102,33 @@ pub fn process_reveal_with_callback(
     }
 
     let requester_program_id = Pubkey::new_from_array(request.requester_program_id);
-    if requester_program_id != Pubkey::default() && callback_program.key != &requester_program_id {
-        return Err(EntropyError::InvalidAccount.into());
-    }
-
     let callback_accounts_len = request.callback_accounts_len as usize;
     if callback_accounts_len > MAX_CALLBACK_ACCOUNTS {
         return Err(EntropyError::InvalidAccount.into());
     }
 
     let remaining_accounts = account_info_iter.as_slice();
-    if remaining_accounts.len() < callback_accounts_len {
-        return Err(EntropyError::InvalidAccount.into());
-    }
-
-    let (callback_accounts, _extra_accounts) = remaining_accounts.split_at(callback_accounts_len);
+    let (callback_program, callback_accounts) = if requester_program_id != Pubkey::default() {
+        if remaining_accounts.len() < 1 + callback_accounts_len {
+            return Err(EntropyError::InvalidAccount.into());
+        }
+        let (callback_program, callback_accounts_rest) = remaining_accounts
+            .split_first()
+            .ok_or(EntropyError::InvalidAccount)?;
+        let (callback_accounts, _extra_accounts) =
+            callback_accounts_rest.split_at(callback_accounts_len);
+        if callback_program.key != &requester_program_id {
+            return Err(EntropyError::InvalidAccount.into());
+        }
+        (Some(callback_program), callback_accounts)
+    } else {
+        if remaining_accounts.len() < callback_accounts_len {
+            return Err(EntropyError::InvalidAccount.into());
+        }
+        let (callback_accounts, _extra_accounts) =
+            remaining_accounts.split_at(callback_accounts_len);
+        (None, callback_accounts)
+    };
     validate_callback_accounts(&request, callback_accounts)?;
 
     let callback_ix_data_len = request.callback_ix_data_len;
@@ -127,6 +138,7 @@ pub fn process_reveal_with_callback(
     let callback_compute_unit_limit = request.compute_unit_limit;
 
     if requester_program_id != Pubkey::default() {
+        let callback_program = callback_program.ok_or(EntropyError::InvalidAccount)?;
         let callback_ix = build_callback_ix(
             callback_program.key,
             callback_accounts,
@@ -140,7 +152,11 @@ pub fn process_reveal_with_callback(
         let callback_compute_units_before = sol_remaining_compute_units();
         let bump_seed = [_bump];
         let signer_seeds: &[&[u8]] = &[ENTROPY_SIGNER_SEED, &bump_seed];
-        invoke_signed(&callback_ix, callback_accounts, &[signer_seeds])?;
+        let mut callback_account_infos =
+            Vec::with_capacity(1usize.saturating_add(callback_accounts_len));
+        callback_account_infos.push(callback_program.clone());
+        callback_account_infos.extend_from_slice(callback_accounts);
+        invoke_signed(&callback_ix, &callback_account_infos, &[signer_seeds])?;
         let callback_compute_units_after = sol_remaining_compute_units();
         let callback_compute_units_spent =
             callback_compute_units_before.saturating_sub(callback_compute_units_after);

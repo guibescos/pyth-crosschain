@@ -9,10 +9,7 @@ use {
     },
     solana_program::{pubkey::Pubkey, system_program},
     solana_sdk::{
-        instruction::InstructionError,
-        rent::Rent,
-        signature::Signer,
-        transaction::TransactionError,
+        instruction::InstructionError, rent::Rent, signature::Signer, transaction::TransactionError,
     },
     test_utils::{build_initialize_ix, new_entropy_program_test, submit_tx, submit_tx_expect_err},
 };

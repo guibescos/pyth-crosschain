@@ -3,12 +3,13 @@ use solana_program::{
     account_info::{next_account_info, AccountInfo},
     entrypoint::ProgramResult,
     hash::{hash, hashv},
-    program::{invoke_signed},
+    program::invoke_signed,
     program_error::ProgramError,
     pubkey::Pubkey,
     system_program,
     sysvar::{slot_hashes, slot_hashes::SlotHashes, Sysvar},
 };
+use std::cell::RefMut;
 
 use crate::{
     accounts::{Provider, Request},
@@ -61,19 +62,12 @@ pub fn process_reveal_with_callback(
         request_discriminator(),
     )?;
 
-    if request.callback_status != CALLBACK_NOT_STARTED
-        && request.callback_status != CALLBACK_FAILED
+    if request.callback_status != CALLBACK_NOT_STARTED && request.callback_status != CALLBACK_FAILED
     {
         return Err(EntropyError::InvalidRevealCall.into());
     }
 
     let request_provider = Pubkey::new_from_array(request.provider);
-    if request_provider.to_bytes() != args.provider {
-        return Err(EntropyError::InvalidAccount.into());
-    }
-    if request.sequence_number != args.sequence_number {
-        return Err(EntropyError::InvalidAccount.into());
-    }
 
     let (expected_provider, _provider_bump) = provider_pda(program_id, &request_provider);
     if provider_account.key != &expected_provider {
@@ -106,8 +100,12 @@ pub fn process_reveal_with_callback(
         [0u8; 32]
     };
 
-    let random_number =
-        hashv(&[&args.user_contribution, &args.provider_contribution, &blockhash]).to_bytes();
+    let random_number = hashv(&[
+        &args.user_contribution,
+        &args.provider_contribution,
+        &blockhash,
+    ])
+    .to_bytes();
 
     if provider.current_commitment_sequence_number < request.sequence_number {
         provider.current_commitment_sequence_number = request.sequence_number;
@@ -151,8 +149,7 @@ pub fn process_reveal_with_callback(
 
         let bump_seed = [_bump];
         let signer_seeds: &[&[u8]] = &[ENTROPY_SIGNER_SEED, &bump_seed];
-        let invoke_result =
-            invoke_signed(&callback_ix, callback_accounts, &[signer_seeds]);
+        let invoke_result = invoke_signed(&callback_ix, callback_accounts, &[signer_seeds]);
 
         if invoke_result.is_err() && request.callback_status == CALLBACK_NOT_STARTED {
             request.callback_status = CALLBACK_FAILED;
@@ -162,9 +159,7 @@ pub fn process_reveal_with_callback(
         invoke_result?;
     }
 
-    let refund_account = extra_accounts
-        .get(0)
-        .ok_or(EntropyError::InvalidAccount)?;
+    let refund_account = extra_accounts.get(0).ok_or(EntropyError::InvalidAccount)?;
     let expected_refund = Pubkey::new_from_array(refund_pubkey);
     if refund_account.key != &expected_refund || !refund_account.is_writable {
         return Err(EntropyError::InvalidAccount.into());

@@ -41,8 +41,8 @@ mod requester_program {
         accounts: &[AccountInfo],
         data: &[u8],
     ) -> ProgramResult {
-        let args =
-            try_from_bytes::<RequestArgs>(data).map_err(|_| ProgramError::InvalidInstructionData)?;
+        let args = try_from_bytes::<RequestArgs>(data)
+            .map_err(|_| ProgramError::InvalidInstructionData)?;
 
         let mut account_info_iter = accounts.iter();
         let requester_signer = next_account_info(&mut account_info_iter)?;
@@ -88,7 +88,8 @@ mod requester_program {
             return Err(ProgramError::InvalidSeeds);
         }
 
-        let signer_seeds: &[&[u8]] = &[REQUESTER_SIGNER_SEED, entropy_program.key.as_ref(), &[bump]];
+        let signer_seeds: &[&[u8]] =
+            &[REQUESTER_SIGNER_SEED, entropy_program.key.as_ref(), &[bump]];
         invoke_signed(
             &entropy_ix,
             &[
@@ -265,7 +266,10 @@ async fn test_request_happy_path() {
         .unwrap()
         .unwrap()
         .lamports;
-    assert_eq!(pyth_fee_vault_after - pyth_fee_vault_before, pyth_fee_lamports);
+    assert_eq!(
+        pyth_fee_vault_after - pyth_fee_vault_before,
+        pyth_fee_lamports
+    );
 
     let request_account_data = banks_client
         .get_account(request_account.pubkey())
@@ -284,13 +288,17 @@ async fn test_request_happy_path() {
     assert_eq!(request.provider, payer.pubkey().to_bytes());
     assert_eq!(request.sequence_number, 1);
     assert_eq!(request.num_hashes, 1);
-    assert_eq!(request.requester_program_id, requester_program_id.to_bytes());
+    assert_eq!(
+        request.requester_program_id,
+        requester_program_id.to_bytes()
+    );
     assert_eq!(request.use_blockhash, 1);
     assert_eq!(request.callback_status, CALLBACK_NOT_NECESSARY);
     assert_eq!(request.compute_unit_limit, 0);
     assert!(request.request_slot > 0);
 
-    let expected_commitment = hashv(&[&args.user_commitment, &provider.current_commitment]).to_bytes();
+    let expected_commitment =
+        hashv(&[&args.user_commitment, &provider.current_commitment]).to_bytes();
     assert_eq!(request.commitment, expected_commitment);
 }
 

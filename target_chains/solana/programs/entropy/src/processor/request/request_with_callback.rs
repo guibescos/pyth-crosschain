@@ -1,3 +1,4 @@
+use bytemuck::{try_cast_slice, try_from_bytes, Pod, Zeroable};
 use solana_program::{
     account_info::{next_account_info, AccountInfo},
     entrypoint::ProgramResult,
@@ -155,84 +156,68 @@ pub fn process_request_with_callback(
     Ok(())
 }
 
-struct RequestWithCallbackArgs {
+struct RequestWithCallbackArgs<'a> {
     user_randomness: [u8; 32],
     compute_unit_limit: u32,
-    callback_accounts: Vec<CallbackMeta>,
-    callback_ix_data: Vec<u8>,
+    callback_accounts: &'a [CallbackMeta],
+    callback_ix_data: &'a [u8],
 }
 
-fn parse_request_with_callback_args(data: &[u8]) -> Result<RequestWithCallbackArgs, ProgramError> {
-    let mut cursor = data;
+#[derive(Clone, Copy, Pod, Zeroable)]
+#[repr(C)]
+struct RequestWithCallbackHeader {
+    user_randomness: [u8; 32],
+    compute_unit_limit: u32,
+    callback_accounts_len: u32,
+}
 
-    let user_randomness = read_array_32(&mut cursor)?;
-    let compute_unit_limit = read_u32(&mut cursor)?;
-    let callback_accounts_len = read_u32(&mut cursor)? as usize;
+fn parse_request_with_callback_args<'a>(
+    data: &'a [u8],
+) -> Result<RequestWithCallbackArgs<'a>, ProgramError> {
+    if data.len() < core::mem::size_of::<RequestWithCallbackHeader>() {
+        return Err(ProgramError::InvalidInstructionData);
+    }
+
+    let (header_bytes, rest) = data.split_at(core::mem::size_of::<RequestWithCallbackHeader>());
+    let header = try_from_bytes::<RequestWithCallbackHeader>(header_bytes)
+        .map_err(|_| ProgramError::InvalidInstructionData)?;
+
+    let callback_accounts_len = header.callback_accounts_len as usize;
     if callback_accounts_len > MAX_CALLBACK_ACCOUNTS {
         return Err(ProgramError::InvalidInstructionData);
     }
 
-    let mut callback_accounts = Vec::with_capacity(callback_accounts_len);
-    for _ in 0..callback_accounts_len {
-        callback_accounts.push(read_callback_meta(&mut cursor)?);
+    let callback_accounts_bytes_len = callback_accounts_len
+        .checked_mul(CallbackMeta::LEN)
+        .ok_or(ProgramError::InvalidInstructionData)?;
+    if rest.len() < callback_accounts_bytes_len + 4 {
+        return Err(ProgramError::InvalidInstructionData);
     }
 
-    let callback_ix_data_len = read_u32(&mut cursor)? as usize;
+    let (callback_accounts_bytes, rest) = rest.split_at(callback_accounts_bytes_len);
+    let callback_accounts = try_cast_slice::<u8, CallbackMeta>(callback_accounts_bytes)
+        .map_err(|_| ProgramError::InvalidInstructionData)?;
+    for meta in callback_accounts {
+        if meta.is_signer > 1 || meta.is_writable > 1 {
+            return Err(ProgramError::InvalidInstructionData);
+        }
+    }
+
+    let (callback_ix_len_bytes, rest) = rest.split_at(4);
+    let callback_ix_data_len = *try_from_bytes::<u32>(callback_ix_len_bytes)
+        .map_err(|_| ProgramError::InvalidInstructionData)? as usize;
     if callback_ix_data_len > CALLBACK_IX_DATA_LEN {
         return Err(ProgramError::InvalidInstructionData);
     }
-    let callback_ix_data = read_bytes(&mut cursor, callback_ix_data_len)?.to_vec();
 
-    if !cursor.is_empty() {
+    if rest.len() != callback_ix_data_len {
         return Err(ProgramError::InvalidInstructionData);
     }
 
     Ok(RequestWithCallbackArgs {
-        user_randomness,
-        compute_unit_limit,
+        user_randomness: header.user_randomness,
+        compute_unit_limit: header.compute_unit_limit,
         callback_accounts,
-        callback_ix_data,
+        callback_ix_data: rest,
     })
-}
-
-fn read_callback_meta(data: &mut &[u8]) -> Result<CallbackMeta, ProgramError> {
-    let pubkey = read_array_32(data)?;
-    let is_signer = read_u8(data)?;
-    let is_writable = read_u8(data)?;
-    if is_signer > 1 || is_writable > 1 {
-        return Err(ProgramError::InvalidInstructionData);
-    }
-    Ok(CallbackMeta {
-        pubkey,
-        is_signer,
-        is_writable,
-    })
-}
-
-fn read_u32(data: &mut &[u8]) -> Result<u32, ProgramError> {
-    let bytes = read_bytes(data, 4)?;
-    Ok(u32::from_le_bytes([
-        bytes[0], bytes[1], bytes[2], bytes[3],
-    ]))
-}
-
-fn read_u8(data: &mut &[u8]) -> Result<u8, ProgramError> {
-    let bytes = read_bytes(data, 1)?;
-    Ok(bytes[0])
-}
-
-fn read_array_32(data: &mut &[u8]) -> Result<[u8; 32], ProgramError> {
-    let bytes = read_bytes(data, 32)?;
-    let mut output = [0u8; 32];
-    output.copy_from_slice(bytes);
-    Ok(output)
-}
-
-fn read_bytes<'a>(data: &mut &'a [u8], len: usize) -> Result<&'a [u8], ProgramError> {
-    if data.len() < len {
-        return Err(ProgramError::InvalidInstructionData);
-    }
-    let (head, tail) = data.split_at(len);
-    *data = tail;
-    Ok(head)
 }

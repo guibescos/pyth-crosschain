@@ -146,7 +146,7 @@ pub fn process_reveal_with_callback(
             callback_compute_units_before.saturating_sub(callback_compute_units_after);
 
         if callback_compute_units_spent > u64::from(callback_compute_unit_limit) {
-            return Err(EntropyError::CallbackComputeUnitLimitExceeded.into());
+            return Err(EntropyError::InsufficientGas.into());
         }
     }
 

@@ -14,10 +14,9 @@ use crate::{
     error::EntropyError,
     instruction::InitializeArgs,
     pda::{config_pda, pyth_fee_vault_pda},
+    pda_loader::init_pda_mut,
+    vault::init_vault_pda,
 };
-
-use super::pda::init_pda_mut;
-use super::vault::init_vault_pda;
 
 pub fn process_initialize(
     program_id: &Pubkey,

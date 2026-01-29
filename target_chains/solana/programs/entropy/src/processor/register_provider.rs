@@ -14,9 +14,9 @@ use crate::{
     error::EntropyError,
     instruction::RegisterProviderArgs,
     pda::{provider_pda, provider_vault_pda},
+    pda_loader::{init_pda_mut, load_pda_mut},
+    vault::init_vault_pda,
 };
-
-use super::{pda::init_pda_mut, pda::load_pda_mut, vault::init_vault_pda};
 
 pub fn process_register_provider(
     program_id: &Pubkey,

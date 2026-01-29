@@ -21,9 +21,8 @@ use crate::{
     error::EntropyError,
     instruction::RequestArgs,
     pda::{config_pda, provider_pda, provider_vault_pda, pyth_fee_vault_pda},
+    pda_loader::{load_pda, load_pda_mut},
 };
-
-use super::pda::{load_pda, load_pda_mut};
 
 pub fn process_request(
     program_id: &Pubkey,

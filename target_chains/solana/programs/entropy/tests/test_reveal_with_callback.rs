@@ -6,6 +6,7 @@ use {
         accounts::{CallbackMeta, Provider, Request},
         constants::{CALLBACK_NOT_STARTED, ENTROPY_SIGNER_SEED, REQUESTER_SIGNER_SEED},
         discriminator::{provider_discriminator, request_discriminator},
+        error::EntropyError,
         instruction::{EntropyInstruction, RevealArgs},
         pda::{config_pda, entropy_signer_pda, provider_pda, provider_vault_pda, pyth_fee_vault_pda},
     },
@@ -22,12 +23,14 @@ use {
     },
     solana_program_test::{processor, ProgramTest},
     solana_sdk::{
+        instruction::InstructionError,
         rent::Rent,
         signature::{Keypair, Signer},
+        transaction::TransactionError,
     },
     test_utils::{
         build_register_args, build_register_provider_ix, initialize_config, new_entropy_program_test,
-        submit_tx,
+        submit_tx, submit_tx_expect_err,
     },
 };
 
@@ -257,6 +260,78 @@ fn build_request_with_callback_data(
     data.extend_from_slice(&(callback_ix_data.len() as u32).to_le_bytes());
     data.extend_from_slice(callback_ix_data);
     data
+}
+
+#[tokio::test]
+async fn test_request_with_callback_rejects_entropy_program_in_callback_accounts() {
+    let program_id = Pubkey::new_unique();
+    let requester_program_id = Pubkey::new_unique();
+    let (mut banks_client, payer, _) =
+        new_program_test_with_requester(program_id, requester_program_id)
+            .start()
+            .await;
+
+    initialize_config(&mut banks_client, &payer, program_id, 0).await;
+
+    let commitment = hash(&[7u8; 32]).to_bytes();
+    let (provider_address, _provider_vault) =
+        register_provider(&mut banks_client, &payer, program_id, 1, 3, commitment).await;
+
+    let (config_address, _) = config_pda(&program_id);
+    let (pyth_fee_vault, _) = pyth_fee_vault_pda(&program_id);
+
+    let request_account = Keypair::new();
+    let callback_accounts = [CallbackMeta {
+        pubkey: program_id.to_bytes(),
+        is_signer: 0,
+        is_writable: 0,
+    }];
+
+    let entropy_request_data =
+        build_request_with_callback_data([9u8; 32], 200_000, &callback_accounts, &[]);
+
+    let mut requester_data = Vec::with_capacity(1 + entropy_request_data.len());
+    requester_data.push(REQUEST_WITH_CALLBACK_ACTION);
+    requester_data.extend_from_slice(&entropy_request_data);
+
+    let (requester_signer, _) = Pubkey::find_program_address(
+        &[REQUESTER_SIGNER_SEED, program_id.as_ref()],
+        &requester_program_id,
+    );
+
+    let request_with_callback_ix = Instruction {
+        program_id: requester_program_id,
+        data: requester_data,
+        accounts: vec![
+            AccountMeta::new_readonly(requester_signer, false),
+            AccountMeta::new(payer.pubkey(), true),
+            AccountMeta::new_readonly(requester_program_id, false),
+            AccountMeta::new(request_account.pubkey(), true),
+            AccountMeta::new(provider_address, false),
+            AccountMeta::new(provider_vault_pda(&program_id, &payer.pubkey()).0, false),
+            AccountMeta::new_readonly(config_address, false),
+            AccountMeta::new(pyth_fee_vault, false),
+            AccountMeta::new_readonly(system_program::id(), false),
+            AccountMeta::new_readonly(requester_program_id, false),
+            AccountMeta::new_readonly(program_id, false),
+        ],
+    };
+
+    let err = submit_tx_expect_err(
+        &mut banks_client,
+        &payer,
+        &[request_with_callback_ix],
+        &[&request_account],
+    )
+    .await;
+
+    assert_eq!(
+        err,
+        TransactionError::InstructionError(
+            0,
+            InstructionError::Custom(EntropyError::InvalidAccount as u32)
+        )
+    );
 }
 
 #[tokio::test]

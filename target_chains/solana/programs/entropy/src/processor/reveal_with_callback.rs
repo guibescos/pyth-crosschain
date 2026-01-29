@@ -126,7 +126,7 @@ pub fn process_reveal_with_callback(
     let request_provider_bytes = request.provider;
     let callback_compute_unit_limit = request.compute_unit_limit;
 
-    if requester_program_id != Pubkey::default() {
+    if callback_compute_unit_limit != 0 {
         let callback_ix = build_callback_ix(
             callback_program.key,
             callback_accounts,

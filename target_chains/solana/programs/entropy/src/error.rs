@@ -21,8 +21,8 @@ pub enum EntropyError {
     BlockhashUnavailable = 7,
     #[error("invalid reveal call")]
     InvalidRevealCall = 8,
-    #[error("callback exceeded compute unit limit")]
-    CallbackComputeUnitLimitExceeded = 9,
+    #[error("insufficient gas")]
+    InsufficientGas = 9,
 }
 
 impl From<EntropyError> for solana_program::program_error::ProgramError {

@@ -245,8 +245,5 @@ fn close_request_account(
 
     **request_account.try_borrow_mut_lamports()? = 0;
     **refund_account.try_borrow_mut_lamports()? = refund_lamports;
-
-    let mut data = request_account.data.borrow_mut();
-    data.fill(0);
     Ok(())
 }

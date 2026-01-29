@@ -112,7 +112,7 @@ mod requester_program {
             program_id: *entropy_program.key,
             data: entropy_data.to_vec(),
             accounts: vec![
-                AccountMeta::new_readonly(*requester_signer.key, false),
+                AccountMeta::new_readonly(*requester_signer.key, true),
                 AccountMeta::new(*payer.key, true),
                 AccountMeta::new_readonly(*requester_program.key, false),
                 AccountMeta::new(*request_account.key, true),
@@ -485,10 +485,8 @@ async fn test_reveal_with_callback_flow() {
     assert_eq!(provider.current_commitment_sequence_number, 1);
     assert_eq!(provider.current_commitment, provider_contribution);
 
-    let request_account_after = banks_client
+    assert!(banks_client
         .get_account(request_account.pubkey())
         .await
-        .unwrap()
-        .unwrap();
-    assert_eq!(request_account_after.lamports, 0);
+        .unwrap().is_none());
 }

@@ -125,12 +125,16 @@ pub fn process_request_with_callback(
         request.callback_accounts_len = args.callback_accounts.len() as u8;
         request.callback_ix_data_len = args.callback_ix_data.len() as u16;
 
+        if args.callback_accounts.len() > MAX_CALLBACK_ACCOUNTS {
+            return Err(EntropyError::InvalidAccount.into());
+        }
         for (index, meta) in args.callback_accounts.iter().enumerate() {
             request.callback_accounts[index] = *meta;
         }
-        let data_len = args.callback_ix_data.len();
-        request.callback_ix_data[..data_len].copy_from_slice(&args.callback_ix_data);
-
+        if args.callback_ix_data.len() > CALLBACK_IX_DATA_LEN {
+            return Err(EntropyError::InvalidAccount.into());
+        }
+        request.callback_ix_data[..args.callback_ix_data.len()].copy_from_slice(&args.callback_ix_data);
     }
 
     set_return_data(&sequence_number.to_le_bytes());

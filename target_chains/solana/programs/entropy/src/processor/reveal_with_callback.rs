@@ -36,6 +36,7 @@ pub fn process_reveal_with_callback(
     let entropy_signer_account = next_account_info(&mut account_info_iter)?;
     let callback_program = next_account_info(&mut account_info_iter)?;
     let system_program_account = next_account_info(&mut account_info_iter)?;
+    let payer_account = next_account_info(&mut account_info_iter)?;
 
     if !request_account.is_writable || !provider_account.is_writable {
         return Err(EntropyError::InvalidAccount.into());
@@ -116,7 +117,7 @@ pub fn process_reveal_with_callback(
         return Err(EntropyError::InvalidAccount.into());
     }
 
-    let (callback_accounts, extra_accounts) = remaining_accounts.split_at(callback_accounts_len);
+    let (callback_accounts, _extra_accounts) = remaining_accounts.split_at(callback_accounts_len);
     validate_callback_accounts(&request, callback_accounts)?;
 
     let callback_ix_data_len = request.callback_ix_data_len;
@@ -148,14 +149,16 @@ pub fn process_reveal_with_callback(
         invoke_result?;
     }
 
-    let refund_account = extra_accounts.get(0).ok_or(EntropyError::InvalidAccount)?;
     let expected_refund = Pubkey::new_from_array(refund_pubkey);
-    if refund_account.key != &expected_refund || !refund_account.is_writable {
+    if payer_account.key != &expected_refund
+        || !payer_account.is_writable
+        || payer_account.is_signer
+    {
         return Err(EntropyError::InvalidAccount.into());
     }
 
     drop(request);
-    close_request_account(request_account, refund_account)?;
+    close_request_account(request_account, payer_account)?;
 
     Ok(())
 }

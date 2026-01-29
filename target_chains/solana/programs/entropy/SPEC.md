@@ -348,8 +348,9 @@ Accounts:
 - `slot_hashes` sysvar (readonly)
 - `[readonly]` entropy_signer (PDA of entropy program)
 - `[readonly]` callback_program (if callback required)
-- `callback accounts` (remaining accounts; must match stored `callback_accounts`)
 - `system_program` (for close)
+- `[writable]` payer (must match request.payer; must be non-signer)
+- `callback accounts` (remaining accounts; must match stored `callback_accounts`)
 
 Args:
 - `provider: Pubkey`

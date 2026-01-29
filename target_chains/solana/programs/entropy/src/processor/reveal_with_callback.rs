@@ -1,4 +1,4 @@
-use bytemuck::{from_bytes_mut, try_from_bytes};
+use bytemuck::try_from_bytes;
 use solana_program::{
     account_info::{next_account_info, AccountInfo},
     entrypoint::ProgramResult,
@@ -20,7 +20,7 @@ use crate::{
     error::EntropyError,
     instruction::RevealArgs,
     pda::{entropy_signer_pda, provider_pda},
-    pda_loader::load_pda_mut,
+    pda_loader::load_account_mut,
 };
 
 pub fn process_reveal_with_callback(
@@ -55,10 +55,12 @@ pub fn process_reveal_with_callback(
         return Err(EntropyError::InvalidPda.into());
     }
 
-    let mut request = load_request_mut(program_id, request_account)?;
-    if request.discriminator != request_discriminator() {
-        return Err(EntropyError::InvalidAccount.into());
-    }
+    let mut request = load_account_mut::<Request>(
+        request_account,
+        program_id,
+        Request::LEN,
+        request_discriminator(),
+    )?;
 
     if request.callback_status != CALLBACK_NOT_STARTED && request.callback_status != CALLBACK_FAILED
     {
@@ -72,7 +74,7 @@ pub fn process_reveal_with_callback(
         return Err(EntropyError::InvalidPda.into());
     }
 
-    let mut provider = load_pda_mut::<Provider>(
+    let mut provider = load_account_mut::<Provider>(
         provider_account,
         program_id,
         Provider::LEN,
@@ -174,17 +176,6 @@ fn parse_reveal_args(data: &[u8]) -> Result<&RevealArgs, ProgramError> {
         return Err(ProgramError::InvalidInstructionData);
     }
     try_from_bytes::<RevealArgs>(data).map_err(|_| ProgramError::InvalidInstructionData)
-}
-
-fn load_request_mut<'a, 'info>(
-    program_id: &Pubkey,
-    request_account: &'a AccountInfo<'info>,
-) -> Result<RefMut<'a, Request>, ProgramError> {
-    if request_account.owner != program_id || request_account.data_len() != Request::LEN {
-        return Err(EntropyError::InvalidAccount.into());
-    }
-    let data = request_account.data.borrow_mut();
-    Ok(RefMut::map(data, |data| from_bytes_mut::<Request>(data)))
 }
 
 fn hash_provider_commitment(

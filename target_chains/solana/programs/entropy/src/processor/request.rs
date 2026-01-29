@@ -21,7 +21,7 @@ use crate::{
     error::EntropyError,
     instruction::RequestArgs,
     pda::{config_pda, provider_pda, provider_vault_pda, pyth_fee_vault_pda},
-    pda_loader::{load_pda, load_pda_mut},
+    pda_loader::{load_account, load_account_mut},
 };
 
 pub fn process_request(
@@ -87,13 +87,13 @@ pub fn process_request(
         return Err(EntropyError::InvalidAccount.into());
     }
 
-    let config = load_pda::<Config>(
+    let config = load_account::<Config>(
         config_account,
         program_id,
         Config::LEN,
         config_discriminator(),
     )?;
-    let mut provider = load_pda_mut::<Provider>(
+    let mut provider = load_account_mut::<Provider>(
         provider_account,
         program_id,
         Provider::LEN,

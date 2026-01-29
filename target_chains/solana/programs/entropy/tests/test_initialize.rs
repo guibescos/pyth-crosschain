@@ -1,59 +1,27 @@
+mod test_utils;
+
 use {
     bytemuck::try_from_bytes,
     entropy::{
         accounts::Config,
         discriminator::config_discriminator,
-        instruction::{EntropyInstruction, InitializeArgs},
         pda::{config_pda, pyth_fee_vault_pda},
     },
-    solana_program::{
-        instruction::{AccountMeta, Instruction},
-        pubkey::Pubkey,
-        system_program,
-    },
-    solana_program_test::{processor, BanksClientError, ProgramTest},
+    solana_program::{pubkey::Pubkey, system_program},
+    solana_program_test::{processor, ProgramTest},
     solana_sdk::{
         instruction::InstructionError,
         rent::Rent,
         signature::Signer,
         transaction::{Transaction, TransactionError},
     },
+    test_utils::{build_initialize_ix, submit_tx},
 };
-
-fn build_initialize_ix(
-    program_id: Pubkey,
-    payer: Pubkey,
-    admin: Pubkey,
-    default_provider: Pubkey,
-    pyth_fee_lamports: u64,
-) -> Instruction {
-    let (config, _) = config_pda(&program_id);
-    let (pyth_fee_vault, _) = pyth_fee_vault_pda(&program_id);
-    let args = InitializeArgs {
-        admin: admin.to_bytes(),
-        pyth_fee_lamports,
-        default_provider: default_provider.to_bytes(),
-    };
-    let mut data = Vec::with_capacity(8 + core::mem::size_of::<InitializeArgs>());
-    data.extend_from_slice(&EntropyInstruction::Initialize.discriminator());
-    data.extend_from_slice(bytemuck::bytes_of(&args));
-
-    Instruction {
-        program_id,
-        data,
-        accounts: vec![
-            AccountMeta::new(payer, true),
-            AccountMeta::new(config, false),
-            AccountMeta::new(pyth_fee_vault, false),
-            AccountMeta::new_readonly(system_program::id(), false),
-        ],
-    }
-}
 
 #[tokio::test]
 async fn test_initialize_happy_path() {
     let program_id = Pubkey::new_unique();
-    let (banks_client, payer, recent_blockhash) = ProgramTest::new(
+    let (mut banks_client, payer, _) = ProgramTest::new(
         "entropy",
         program_id,
         processor!(entropy::processor::process_instruction),
@@ -72,9 +40,7 @@ async fn test_initialize_happy_path() {
         default_provider,
         pyth_fee_lamports,
     );
-    let mut transaction = Transaction::new_with_payer(&[instruction], Some(&payer.pubkey()));
-    transaction.sign(&[&payer], recent_blockhash);
-    banks_client.process_transaction(transaction).await.unwrap();
+    submit_tx(&mut banks_client, &payer, &[instruction], &[]).await;
 
     let (config_address, expected_bump) = config_pda(&program_id);
     let (fee_vault_address, _) = pyth_fee_vault_pda(&program_id);
@@ -108,7 +74,7 @@ async fn test_initialize_happy_path() {
 #[tokio::test]
 async fn test_initialize_records_prefunded_fee_vault() {
     let program_id = Pubkey::new_unique();
-    let (banks_client, payer, recent_blockhash) = ProgramTest::new(
+    let (mut banks_client, payer, _) = ProgramTest::new(
         "entropy",
         program_id,
         processor!(entropy::processor::process_instruction),
@@ -124,11 +90,8 @@ async fn test_initialize_records_prefunded_fee_vault() {
         &fee_vault_address,
         pre_fund_lamports,
     );
-    let mut prefund_tx = Transaction::new_with_payer(&[prefund_ix], Some(&payer.pubkey()));
-    prefund_tx.sign(&[&payer], recent_blockhash);
-    banks_client.process_transaction(prefund_tx).await.unwrap();
+    submit_tx(&mut banks_client, &payer, &[prefund_ix], &[]).await;
 
-    let recent_blockhash = banks_client.get_latest_blockhash().await.unwrap();
     let instruction = build_initialize_ix(
         program_id,
         payer.pubkey(),
@@ -136,9 +99,7 @@ async fn test_initialize_records_prefunded_fee_vault() {
         Pubkey::new_unique(),
         1234,
     );
-    let mut transaction = Transaction::new_with_payer(&[instruction], Some(&payer.pubkey()));
-    transaction.sign(&[&payer], recent_blockhash);
-    banks_client.process_transaction(transaction).await.unwrap();
+    submit_tx(&mut banks_client, &payer, &[instruction], &[]).await;
 
     let (config_address, _) = config_pda(&program_id);
     let config_account = banks_client

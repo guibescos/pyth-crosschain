@@ -1,11 +1,13 @@
+mod test_utils;
+
 use {
     bytemuck::{bytes_of, try_from_bytes},
     entropy::{
-        accounts::{Config, Provider, Request},
+        accounts::{Provider, Request},
         constants::{CALLBACK_NOT_NECESSARY, REQUESTER_SIGNER_SEED},
-        discriminator::{config_discriminator, provider_discriminator, request_discriminator},
+        discriminator::{provider_discriminator, request_discriminator},
         error::EntropyError,
-        instruction::{EntropyInstruction, InitializeArgs, RegisterProviderArgs, RequestArgs},
+        instruction::{EntropyInstruction, RequestArgs},
         pda::{config_pda, provider_pda, provider_vault_pda, pyth_fee_vault_pda},
     },
     solana_program::{
@@ -13,7 +15,7 @@ use {
         entrypoint::ProgramResult,
         hash::hashv,
         instruction::{AccountMeta, Instruction},
-        program::{invoke_signed},
+        program::invoke_signed,
         program_error::ProgramError,
         pubkey::Pubkey,
         system_program,
@@ -25,6 +27,7 @@ use {
         signature::{Keypair, Signer},
         transaction::{Transaction, TransactionError},
     },
+    test_utils::{build_register_args, build_register_provider_ix, initialize_config, submit_tx},
 };
 
 mod requester_program {
@@ -103,73 +106,6 @@ mod requester_program {
     }
 }
 
-fn build_initialize_ix(
-    program_id: Pubkey,
-    payer: Pubkey,
-    admin: Pubkey,
-    default_provider: Pubkey,
-    pyth_fee_lamports: u64,
-) -> Instruction {
-    let (config, _) = config_pda(&program_id);
-    let (pyth_fee_vault, _) = pyth_fee_vault_pda(&program_id);
-    let args = InitializeArgs {
-        admin: admin.to_bytes(),
-        pyth_fee_lamports,
-        default_provider: default_provider.to_bytes(),
-    };
-    let mut data = Vec::with_capacity(8 + core::mem::size_of::<InitializeArgs>());
-    data.extend_from_slice(&EntropyInstruction::Initialize.discriminator());
-    data.extend_from_slice(bytes_of(&args));
-
-    Instruction {
-        program_id,
-        data,
-        accounts: vec![
-            AccountMeta::new(payer, true),
-            AccountMeta::new(config, false),
-            AccountMeta::new(pyth_fee_vault, false),
-            AccountMeta::new_readonly(system_program::id(), false),
-        ],
-    }
-}
-
-fn build_register_provider_ix(
-    program_id: Pubkey,
-    provider_authority: Pubkey,
-    provider_account: Pubkey,
-    provider_vault: Pubkey,
-    args: RegisterProviderArgs,
-) -> Instruction {
-    let mut data = Vec::with_capacity(8 + core::mem::size_of::<RegisterProviderArgs>());
-    data.extend_from_slice(&EntropyInstruction::RegisterProvider.discriminator());
-    data.extend_from_slice(bytes_of(&args));
-
-    Instruction {
-        program_id,
-        data,
-        accounts: vec![
-            AccountMeta::new(provider_authority, true),
-            AccountMeta::new(provider_account, false),
-            AccountMeta::new(provider_vault, false),
-            AccountMeta::new_readonly(system_program::id(), false),
-        ],
-    }
-}
-
-fn build_register_args(fee_lamports: u64, commitment: [u8; 32], chain_length: u64) -> RegisterProviderArgs {
-    RegisterProviderArgs {
-        fee_lamports,
-        commitment,
-        commitment_metadata_len: 0,
-        _padding0: [0u8; 6],
-        commitment_metadata: [0u8; entropy::constants::COMMITMENT_METADATA_LEN],
-        chain_length,
-        uri_len: 0,
-        uri: [0u8; entropy::constants::URI_LEN],
-        _padding1: [0u8; 6],
-    }
-}
-
 fn build_requester_request_ix(
     requester_program_id: Pubkey,
     entropy_program_id: Pubkey,
@@ -200,34 +136,6 @@ fn build_requester_request_ix(
     }
 }
 
-async fn initialize_config(
-    banks_client: &mut solana_program_test::BanksClient,
-    payer: &Keypair,
-    program_id: Pubkey,
-    pyth_fee_lamports: u64,
-) {
-    let instruction = build_initialize_ix(
-        program_id,
-        payer.pubkey(),
-        Pubkey::new_unique(),
-        Pubkey::new_unique(),
-        pyth_fee_lamports,
-    );
-    let recent_blockhash = banks_client.get_latest_blockhash().await.unwrap();
-    let mut transaction = Transaction::new_with_payer(&[instruction], Some(&payer.pubkey()));
-    transaction.sign(&[payer], recent_blockhash);
-    banks_client.process_transaction(transaction).await.unwrap();
-
-    let (config_address, _) = config_pda(&program_id);
-    let config_account = banks_client
-        .get_account(config_address)
-        .await
-        .unwrap()
-        .unwrap();
-    let config = try_from_bytes::<Config>(&config_account.data).unwrap();
-    assert_eq!(config.discriminator, config_discriminator());
-}
-
 async fn register_provider(
     banks_client: &mut solana_program_test::BanksClient,
     payer: &Keypair,
@@ -246,11 +154,9 @@ async fn register_provider(
         provider_address,
         provider_vault,
         args,
+        true,
     );
-    let recent_blockhash = banks_client.get_latest_blockhash().await.unwrap();
-    let mut transaction = Transaction::new_with_payer(&[instruction], Some(&payer.pubkey()));
-    transaction.sign(&[payer], recent_blockhash);
-    banks_client.process_transaction(transaction).await.unwrap();
+    submit_tx(banks_client, payer, &[instruction], &[]).await;
 
     (provider_address, provider_vault)
 }

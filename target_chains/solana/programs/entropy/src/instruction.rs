@@ -17,6 +17,7 @@ pub enum EntropyInstruction {
     UpdateProviderConfig = 7,
     WithdrawProviderFees = 8,
     Governance = 9,
+    RequestV2 = 10,
 }
 
 pub const INSTRUCTION_DISCRIMINATOR_LEN: usize = 8;
@@ -47,6 +48,7 @@ impl EntropyInstruction {
             7 => EntropyInstruction::UpdateProviderConfig,
             8 => EntropyInstruction::WithdrawProviderFees,
             9 => EntropyInstruction::Governance,
+            10 => EntropyInstruction::RequestV2,
             _ => return Err(solana_program::program_error::ProgramError::InvalidInstructionData),
         };
         Ok((instruction, payload))

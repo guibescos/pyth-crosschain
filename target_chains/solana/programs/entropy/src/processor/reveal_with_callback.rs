@@ -14,7 +14,7 @@ use std::cell::RefMut;
 use crate::{
     accounts::{Provider, Request},
     constants::{
-        CALLBACK_FAILED, CALLBACK_NOT_STARTED, ENTROPY_SIGNER_SEED, MAX_CALLBACK_ACCOUNTS,
+        CALLBACK_NOT_STARTED, ENTROPY_SIGNER_SEED, MAX_CALLBACK_ACCOUNTS,
     },
     error::EntropyError,
     instruction::RevealArgs,
@@ -57,8 +57,7 @@ pub fn process_reveal_with_callback(
 
     let mut request = load_account_mut::<Request>(request_account, program_id)?;
 
-    if request.callback_status != CALLBACK_NOT_STARTED && request.callback_status != CALLBACK_FAILED
-    {
+    if request.callback_status != CALLBACK_NOT_STARTED {
         return Err(EntropyError::InvalidRevealCall.into());
     }
 
@@ -138,14 +137,7 @@ pub fn process_reveal_with_callback(
 
         let bump_seed = [_bump];
         let signer_seeds: &[&[u8]] = &[ENTROPY_SIGNER_SEED, &bump_seed];
-        let invoke_result = invoke_signed(&callback_ix, callback_accounts, &[signer_seeds]);
-
-        if invoke_result.is_err() && request.callback_status == CALLBACK_NOT_STARTED {
-            request.callback_status = CALLBACK_FAILED;
-            return Ok(());
-        }
-
-        invoke_result?;
+        invoke_signed(&callback_ix, callback_accounts, &[signer_seeds])?;
     }
 
     if payer_account.key != &Pubkey::new_from_array(request.payer) || !payer_account.is_writable

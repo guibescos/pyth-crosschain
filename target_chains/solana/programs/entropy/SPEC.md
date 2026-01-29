@@ -162,7 +162,6 @@ and that it is a signer.
 - `CALLBACK_NOT_NECESSARY = 0`
 - `CALLBACK_NOT_STARTED = 1`
 - `CALLBACK_IN_PROGRESS = 2`
-- `CALLBACK_FAILED = 3`
 
 ## 4. Instructions
 
@@ -358,7 +357,7 @@ Args:
 - `provider_contribution: [u8; 32]`
 
 Behavior:
-- `callback_status` must be `CALLBACK_NOT_STARTED` or `CALLBACK_FAILED`.
+- `callback_status` must be `CALLBACK_NOT_STARTED`.
 - Verify commitment and compute random number.
 - `entropy_signer` must match `find_program_address(["entropy_signer"], entropy_program_id)` and
   be a signer (via `invoke_signed`).
@@ -367,7 +366,6 @@ Behavior:
   instruction data = `callback_ix_data || entropy_callback_payload`, where the payload
   encodes (sequence_number, provider, random_number). Recommended: define a Solana entropy
   callback interface for requesters.
-- If CPI fails and status was NOT_STARTED, mark as CALLBACK_FAILED.
 - If CPI succeeds, close request account.
 
 ### 4.7 Advance provider commitment

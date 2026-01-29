@@ -80,12 +80,7 @@ pub fn process_register_provider(
             Provider::LEN,
         )?
     } else {
-        let provider = load_account_mut::<Provider>(
-            provider_account,
-            program_id,
-            Provider::LEN,
-            provider_discriminator(),
-        )?;
+        let provider = load_account_mut::<Provider>(provider_account, program_id)?;
         if provider.provider_authority != provider_authority.key.to_bytes() {
             return Err(EntropyError::InvalidAccount.into());
         }

@@ -16,7 +16,6 @@ use crate::{
     constants::{
         CALLBACK_FAILED, CALLBACK_NOT_STARTED, ENTROPY_SIGNER_SEED, MAX_CALLBACK_ACCOUNTS,
     },
-    discriminator::{provider_discriminator, request_discriminator},
     error::EntropyError,
     instruction::RevealArgs,
     pda::{entropy_signer_pda, provider_pda},
@@ -55,12 +54,7 @@ pub fn process_reveal_with_callback(
         return Err(EntropyError::InvalidPda.into());
     }
 
-    let mut request = load_account_mut::<Request>(
-        request_account,
-        program_id,
-        Request::LEN,
-        request_discriminator(),
-    )?;
+    let mut request = load_account_mut::<Request>(request_account, program_id)?;
 
     if request.callback_status != CALLBACK_NOT_STARTED && request.callback_status != CALLBACK_FAILED
     {
@@ -74,12 +68,7 @@ pub fn process_reveal_with_callback(
         return Err(EntropyError::InvalidPda.into());
     }
 
-    let mut provider = load_account_mut::<Provider>(
-        provider_account,
-        program_id,
-        Provider::LEN,
-        provider_discriminator(),
-    )?;
+    let mut provider = load_account_mut::<Provider>(provider_account, program_id)?;
 
     let provider_commitment =
         hash_provider_commitment(args.provider_contribution, request.num_hashes)?;

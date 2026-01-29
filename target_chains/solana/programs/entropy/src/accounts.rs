@@ -1,10 +1,16 @@
 use crate::constants::{
     CALLBACK_IX_DATA_LEN, COMMITMENT_METADATA_LEN, MAX_CALLBACK_ACCOUNTS, URI_LEN,
 };
+use crate::discriminator::{config_discriminator, provider_discriminator, request_discriminator};
 use bytemuck::{Pod, Zeroable};
 use solana_program::program_error::ProgramError;
 
 pub type PubkeyBytes = [u8; 32];
+
+pub trait Account: Pod {
+    const LEN: usize;
+    fn discriminator() -> [u8; 8];
+}
 
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
@@ -21,6 +27,14 @@ pub struct Config {
 
 impl Config {
     pub const LEN: usize = core::mem::size_of::<Self>();
+}
+
+impl Account for Config {
+    const LEN: usize = Self::LEN;
+
+    fn discriminator() -> [u8; 8] {
+        config_discriminator()
+    }
 }
 
 #[derive(Clone, Copy, Pod, Zeroable)]
@@ -67,6 +81,14 @@ impl Provider {
     }
 }
 
+impl Account for Provider {
+    const LEN: usize = Self::LEN;
+
+    fn discriminator() -> [u8; 8] {
+        provider_discriminator()
+    }
+}
+
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct CallbackMeta {
@@ -108,4 +130,12 @@ pub struct Request {
 
 impl Request {
     pub const LEN: usize = core::mem::size_of::<Self>();
+}
+
+impl Account for Request {
+    const LEN: usize = Self::LEN;
+
+    fn discriminator() -> [u8; 8] {
+        request_discriminator()
+    }
 }

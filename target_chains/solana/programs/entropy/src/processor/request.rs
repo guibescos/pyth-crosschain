@@ -17,7 +17,7 @@ use crate::{
     constants::{
         CALLBACK_IX_DATA_LEN, CALLBACK_NOT_NECESSARY, MAX_CALLBACK_ACCOUNTS, REQUESTER_SIGNER_SEED,
     },
-    discriminator::{config_discriminator, provider_discriminator, request_discriminator},
+    discriminator::request_discriminator,
     error::EntropyError,
     instruction::RequestArgs,
     pda::{config_pda, provider_pda, provider_vault_pda, pyth_fee_vault_pda},
@@ -87,18 +87,8 @@ pub fn process_request(
         return Err(EntropyError::InvalidAccount.into());
     }
 
-    let config = load_account::<Config>(
-        config_account,
-        program_id,
-        Config::LEN,
-        config_discriminator(),
-    )?;
-    let mut provider = load_account_mut::<Provider>(
-        provider_account,
-        program_id,
-        Provider::LEN,
-        provider_discriminator(),
-    )?;
+    let config = load_account::<Config>(config_account, program_id)?;
+    let mut provider = load_account_mut::<Provider>(provider_account, program_id)?;
     let provider_authority = Pubkey::new_from_array(provider.provider_authority);
     let (expected_provider, _provider_bump) = provider_pda(program_id, &provider_authority);
     if provider_account.key != &expected_provider {

@@ -14,7 +14,7 @@ use crate::{
     error::EntropyError,
     instruction::RegisterProviderArgs,
     pda::{provider_pda, provider_vault_pda},
-    pda_loader::{init_pda_mut, load_pda_mut},
+    pda_loader::{init_pda_mut, load_account_mut},
     vault::init_vault_pda,
 };
 
@@ -80,7 +80,7 @@ pub fn process_register_provider(
             Provider::LEN,
         )?
     } else {
-        let provider = load_pda_mut::<Provider>(
+        let provider = load_account_mut::<Provider>(
             provider_account,
             program_id,
             Provider::LEN,

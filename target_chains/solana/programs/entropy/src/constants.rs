@@ -26,4 +26,3 @@ pub const REQUESTER_SIGNER_SEED: &[u8] = b"requester_signer";
 pub const CALLBACK_NOT_NECESSARY: u8 = 0;
 pub const CALLBACK_NOT_STARTED: u8 = 1;
 pub const CALLBACK_IN_PROGRESS: u8 = 2;
-pub const CALLBACK_FAILED: u8 = 3;

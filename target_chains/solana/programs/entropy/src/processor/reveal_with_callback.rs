@@ -124,6 +124,7 @@ pub fn process_reveal_with_callback(
     if callback_compute_unit_limit != 0  && request.callback_status == CALLBACK_NOT_STARTED {
         let callback_ix = build_callback_ix(
             callback_program.key,
+            entropy_signer_account.key,
             callback_accounts,
             callback_ix_data_len,
             &callback_ix_data,
@@ -136,8 +137,9 @@ pub fn process_reveal_with_callback(
         let bump_seed = [_bump];
         let signer_seeds: &[&[u8]] = &[ENTROPY_SIGNER_SEED, &bump_seed];
         let mut callback_account_infos =
-            Vec::with_capacity(callback_accounts.len().saturating_add(1));
+            Vec::with_capacity(callback_accounts.len().saturating_add(2));
         callback_account_infos.push(callback_program.clone());
+        callback_account_infos.push(entropy_signer_account.clone());
         callback_account_infos.extend_from_slice(callback_accounts);
         invoke_signed(&callback_ix, &callback_account_infos, &[signer_seeds])?;
         let callback_compute_units_after = sol_remaining_compute_units();
@@ -198,6 +200,7 @@ fn validate_callback_accounts(
 
 fn build_callback_ix(
     program_id: &Pubkey,
+    entropy_signer: &Pubkey,
     callback_accounts: &[AccountInfo],
     callback_ix_data_len: u16,
     callback_ix_data: &[u8],
@@ -216,14 +219,19 @@ fn build_callback_ix(
     data.extend_from_slice(&provider);
     data.extend_from_slice(&random_number);
 
-    let metas = callback_accounts
+    let mut metas = Vec::with_capacity(callback_accounts.len().saturating_add(1));
+    metas.push(solana_program::instruction::AccountMeta {
+        pubkey: *entropy_signer,
+        is_signer: true,
+        is_writable: false,
+    });
+    metas.extend(callback_accounts
         .iter()
         .map(|info| solana_program::instruction::AccountMeta {
             pubkey: *info.key,
             is_signer: info.is_signer,
             is_writable: info.is_writable,
-        })
-        .collect();
+        }));
 
     Ok(solana_program::instruction::Instruction {
         program_id: *program_id,

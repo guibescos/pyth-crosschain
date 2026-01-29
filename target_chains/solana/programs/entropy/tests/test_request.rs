@@ -25,9 +25,12 @@ use {
         instruction::InstructionError,
         rent::Rent,
         signature::{Keypair, Signer},
-        transaction::{Transaction, TransactionError},
+        transaction::TransactionError,
     },
-    test_utils::{build_register_args, build_register_provider_ix, initialize_config, submit_tx},
+    test_utils::{
+        build_register_args, build_register_provider_ix, initialize_config,
+        new_entropy_program_test, submit_tx, submit_tx_expect_err,
+    },
 };
 
 mod requester_program {
@@ -161,23 +164,27 @@ async fn register_provider(
     (provider_address, provider_vault)
 }
 
-#[tokio::test]
-async fn test_request_happy_path() {
-    let program_id = Pubkey::new_unique();
-    let requester_program_id = Pubkey::new_unique();
-
-    let mut program_test = ProgramTest::new(
-        "entropy",
-        program_id,
-        processor!(entropy::processor::process_instruction),
-    );
+fn new_program_test_with_requester(
+    program_id: Pubkey,
+    requester_program_id: Pubkey,
+) -> ProgramTest {
+    let mut program_test = new_entropy_program_test(program_id);
     program_test.add_program(
         "entropy-requester",
         requester_program_id,
         processor!(requester_program::process_instruction),
     );
+    program_test
+}
 
-    let (mut banks_client, payer, _) = program_test.start().await;
+#[tokio::test]
+async fn test_request_happy_path() {
+    let program_id = Pubkey::new_unique();
+    let requester_program_id = Pubkey::new_unique();
+    let (mut banks_client, payer, _) =
+        new_program_test_with_requester(program_id, requester_program_id)
+            .start()
+            .await;
 
     let pyth_fee_lamports = 321;
     initialize_config(&mut banks_client, &payer, program_id, pyth_fee_lamports).await;
@@ -227,10 +234,13 @@ async fn test_request_happy_path() {
         args,
     );
 
-    let recent_blockhash = banks_client.get_latest_blockhash().await.unwrap();
-    let mut transaction = Transaction::new_with_payer(&[instruction], Some(&payer.pubkey()));
-    transaction.sign(&[&payer, &request_account], recent_blockhash);
-    banks_client.process_transaction(transaction).await.unwrap();
+    submit_tx(
+        &mut banks_client,
+        &payer,
+        &[instruction],
+        &[&request_account],
+    )
+    .await;
 
     let provider_account = banks_client
         .get_account(provider_address)
@@ -288,19 +298,10 @@ async fn test_request_happy_path() {
 async fn test_request_out_of_randomness() {
     let program_id = Pubkey::new_unique();
     let requester_program_id = Pubkey::new_unique();
-
-    let mut program_test = ProgramTest::new(
-        "entropy",
-        program_id,
-        processor!(entropy::processor::process_instruction),
-    );
-    program_test.add_program(
-        "entropy-requester",
-        requester_program_id,
-        processor!(requester_program::process_instruction),
-    );
-
-    let (mut banks_client, payer, _) = program_test.start().await;
+    let (mut banks_client, payer, _) =
+        new_program_test_with_requester(program_id, requester_program_id)
+            .start()
+            .await;
 
     initialize_config(&mut banks_client, &payer, program_id, 0).await;
 
@@ -335,14 +336,13 @@ async fn test_request_out_of_randomness() {
         args,
     );
 
-    let recent_blockhash = banks_client.get_latest_blockhash().await.unwrap();
-    let mut transaction = Transaction::new_with_payer(&[instruction], Some(&payer.pubkey()));
-    transaction.sign(&[&payer, &request_account], recent_blockhash);
-    let err = banks_client
-        .process_transaction(transaction)
-        .await
-        .unwrap_err()
-        .unwrap();
+    let err = submit_tx_expect_err(
+        &mut banks_client,
+        &payer,
+        &[instruction],
+        &[&request_account],
+    )
+    .await;
 
     assert_eq!(
         err,
@@ -357,19 +357,10 @@ async fn test_request_out_of_randomness() {
 async fn test_request_rejects_invalid_blockhash_flag() {
     let program_id = Pubkey::new_unique();
     let requester_program_id = Pubkey::new_unique();
-
-    let mut program_test = ProgramTest::new(
-        "entropy",
-        program_id,
-        processor!(entropy::processor::process_instruction),
-    );
-    program_test.add_program(
-        "entropy-requester",
-        requester_program_id,
-        processor!(requester_program::process_instruction),
-    );
-
-    let (mut banks_client, payer, _) = program_test.start().await;
+    let (mut banks_client, payer, _) =
+        new_program_test_with_requester(program_id, requester_program_id)
+            .start()
+            .await;
 
     initialize_config(&mut banks_client, &payer, program_id, 0).await;
 
@@ -404,14 +395,13 @@ async fn test_request_rejects_invalid_blockhash_flag() {
         args,
     );
 
-    let recent_blockhash = banks_client.get_latest_blockhash().await.unwrap();
-    let mut transaction = Transaction::new_with_payer(&[instruction], Some(&payer.pubkey()));
-    transaction.sign(&[&payer, &request_account], recent_blockhash);
-    let err = banks_client
-        .process_transaction(transaction)
-        .await
-        .unwrap_err()
-        .unwrap();
+    let err = submit_tx_expect_err(
+        &mut banks_client,
+        &payer,
+        &[instruction],
+        &[&request_account],
+    )
+    .await;
 
     assert_eq!(
         err,

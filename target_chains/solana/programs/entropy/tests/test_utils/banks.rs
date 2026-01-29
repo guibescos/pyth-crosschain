@@ -1,11 +1,12 @@
 use {
     bytemuck::try_from_bytes,
     entropy::{accounts::Config, discriminator::config_discriminator, pda::config_pda},
-    solana_program_test::BanksClient,
+    solana_program::pubkey::Pubkey,
+    solana_program_test::{processor, BanksClient, ProgramTest},
     solana_sdk::{
         instruction::Instruction,
         signature::{Keypair, Signer},
-        transaction::Transaction,
+        transaction::{Transaction, TransactionError},
     },
 };
 
@@ -51,4 +52,33 @@ pub async fn submit_tx(
     let mut transaction = Transaction::new_with_payer(instructions, Some(&payer.pubkey()));
     transaction.sign(&signers, recent_blockhash);
     banks_client.process_transaction(transaction).await.unwrap();
+}
+
+pub async fn submit_tx_expect_err(
+    banks_client: &mut BanksClient,
+    payer: &Keypair,
+    instructions: &[Instruction],
+    additional_signers: &[&Keypair],
+) -> TransactionError {
+    let recent_blockhash = banks_client.get_latest_blockhash().await.unwrap();
+    let mut signers = Vec::with_capacity(1 + additional_signers.len());
+    signers.push(payer);
+    for signer in additional_signers {
+        signers.push(*signer);
+    }
+    let mut transaction = Transaction::new_with_payer(instructions, Some(&payer.pubkey()));
+    transaction.sign(&signers, recent_blockhash);
+    banks_client
+        .process_transaction(transaction)
+        .await
+        .unwrap_err()
+        .unwrap()
+}
+
+pub fn new_entropy_program_test(program_id: Pubkey) -> ProgramTest {
+    ProgramTest::new(
+        "entropy",
+        program_id,
+        processor!(entropy::processor::process_instruction),
+    )
 }

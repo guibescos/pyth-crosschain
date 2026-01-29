@@ -124,7 +124,6 @@ pub fn process_reveal_with_callback(
     let callback_ix_data = request.callback_ix_data;
     let request_sequence_number = request.sequence_number;
     let request_provider_bytes = request.provider;
-    let refund_pubkey = request.payer;
 
     if callback_program_id != Pubkey::default() {
         let callback_ix = build_callback_ix(
@@ -149,10 +148,7 @@ pub fn process_reveal_with_callback(
         invoke_result?;
     }
 
-    let expected_refund = Pubkey::new_from_array(refund_pubkey);
-    if payer_account.key != &expected_refund
-        || !payer_account.is_writable
-        || payer_account.is_signer
+    if payer_account.key != &Pubkey::new_from_array(request.payer) || !payer_account.is_writable
     {
         return Err(EntropyError::InvalidAccount.into());
     }

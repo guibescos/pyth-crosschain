@@ -9,30 +9,23 @@ use {
         pda::{provider_pda, provider_vault_pda},
     },
     solana_program::{pubkey::Pubkey, system_program},
-    solana_program_test::{processor, ProgramTest},
     solana_sdk::{
         account::Account,
         instruction::InstructionError,
         rent::Rent,
         signature::{Keypair, Signer},
-        transaction::{Transaction, TransactionError},
+        transaction::TransactionError,
     },
     test_utils::{
         build_register_args_with_metadata, build_register_provider_ix, initialize_config,
-        submit_tx,
+        new_entropy_program_test, submit_tx, submit_tx_expect_err,
     },
 };
 
 #[tokio::test]
 async fn test_register_provider_happy_path() {
     let program_id = Pubkey::new_unique();
-    let (mut banks_client, payer, _) = ProgramTest::new(
-        "entropy",
-        program_id,
-        processor!(entropy::processor::process_instruction),
-    )
-    .start()
-    .await;
+    let (mut banks_client, payer, _) = new_entropy_program_test(program_id).start().await;
 
     initialize_config(&mut banks_client, &payer, program_id, 1234).await;
 
@@ -103,13 +96,7 @@ async fn test_register_provider_happy_path() {
 #[tokio::test]
 async fn test_register_provider_rotation_updates_commitment_and_sequence() {
     let program_id = Pubkey::new_unique();
-    let (mut banks_client, payer, _) = ProgramTest::new(
-        "entropy",
-        program_id,
-        processor!(entropy::processor::process_instruction),
-    )
-    .start()
-    .await;
+    let (mut banks_client, payer, _) = new_entropy_program_test(program_id).start().await;
 
     initialize_config(&mut banks_client, &payer, program_id, 1234).await;
 
@@ -188,13 +175,7 @@ async fn test_register_provider_rotation_updates_commitment_and_sequence() {
 #[tokio::test]
 async fn test_register_provider_rejects_zero_chain_length() {
     let program_id = Pubkey::new_unique();
-    let (mut banks_client, payer, _) = ProgramTest::new(
-        "entropy",
-        program_id,
-        processor!(entropy::processor::process_instruction),
-    )
-    .start()
-    .await;
+    let (mut banks_client, payer, _) = new_entropy_program_test(program_id).start().await;
 
     initialize_config(&mut banks_client, &payer, program_id, 1234).await;
 
@@ -209,15 +190,9 @@ async fn test_register_provider_rejects_zero_chain_length() {
         args,
         true,
     );
-    let recent_blockhash = banks_client.get_latest_blockhash().await.unwrap();
-    let mut transaction = Transaction::new_with_payer(&[instruction], Some(&payer.pubkey()));
-    transaction.sign(&[&payer], recent_blockhash);
-    let err = banks_client
-        .process_transaction(transaction)
-        .await
-        .unwrap_err();
+    let err = submit_tx_expect_err(&mut banks_client, &payer, &[instruction], &[]).await;
     assert_eq!(
-        err.unwrap(),
+        err,
         TransactionError::InstructionError(0, InstructionError::InvalidArgument)
     );
 }
@@ -225,13 +200,7 @@ async fn test_register_provider_rejects_zero_chain_length() {
 #[tokio::test]
 async fn test_register_provider_requires_provider_authority_signer() {
     let program_id = Pubkey::new_unique();
-    let (mut banks_client, payer, _) = ProgramTest::new(
-        "entropy",
-        program_id,
-        processor!(entropy::processor::process_instruction),
-    )
-    .start()
-    .await;
+    let (mut banks_client, payer, _) = new_entropy_program_test(program_id).start().await;
 
     initialize_config(&mut banks_client, &payer, program_id, 1234).await;
 
@@ -247,15 +216,9 @@ async fn test_register_provider_requires_provider_authority_signer() {
         args,
         false,
     );
-    let recent_blockhash = banks_client.get_latest_blockhash().await.unwrap();
-    let mut transaction = Transaction::new_with_payer(&[instruction], Some(&payer.pubkey()));
-    transaction.sign(&[&payer], recent_blockhash);
-    let err = banks_client
-        .process_transaction(transaction)
-        .await
-        .unwrap_err();
+    let err = submit_tx_expect_err(&mut banks_client, &payer, &[instruction], &[]).await;
     assert_eq!(
-        err.unwrap(),
+        err,
         TransactionError::InstructionError(0, InstructionError::MissingRequiredSignature)
     );
 }
@@ -263,13 +226,7 @@ async fn test_register_provider_requires_provider_authority_signer() {
 #[tokio::test]
 async fn test_register_provider_rejects_wrong_provider_pda() {
     let program_id = Pubkey::new_unique();
-    let (mut banks_client, payer, _) = ProgramTest::new(
-        "entropy",
-        program_id,
-        processor!(entropy::processor::process_instruction),
-    )
-    .start()
-    .await;
+    let (mut banks_client, payer, _) = new_entropy_program_test(program_id).start().await;
 
     initialize_config(&mut banks_client, &payer, program_id, 1234).await;
 
@@ -285,15 +242,9 @@ async fn test_register_provider_rejects_wrong_provider_pda() {
         args,
         true,
     );
-    let recent_blockhash = banks_client.get_latest_blockhash().await.unwrap();
-    let mut transaction = Transaction::new_with_payer(&[instruction], Some(&payer.pubkey()));
-    transaction.sign(&[&payer], recent_blockhash);
-    let err = banks_client
-        .process_transaction(transaction)
-        .await
-        .unwrap_err();
+    let err = submit_tx_expect_err(&mut banks_client, &payer, &[instruction], &[]).await;
     assert_eq!(
-        err.unwrap(),
+        err,
         TransactionError::InstructionError(
             0,
             InstructionError::Custom(EntropyError::InvalidPda as u32)
@@ -307,11 +258,7 @@ async fn test_register_provider_rejects_existing_provider_wrong_owner_or_size() 
     let provider_authority = Keypair::new();
     let (provider_address, _) = provider_pda(&program_id, &provider_authority.pubkey());
 
-    let mut program_test = ProgramTest::new(
-        "entropy",
-        program_id,
-        processor!(entropy::processor::process_instruction),
-    );
+    let mut program_test = new_entropy_program_test(program_id);
     program_test.add_account(
         provider_address,
         Account {
@@ -337,15 +284,15 @@ async fn test_register_provider_rejects_existing_provider_wrong_owner_or_size() 
         args,
         true,
     );
-    let recent_blockhash = banks_client.get_latest_blockhash().await.unwrap();
-    let mut transaction = Transaction::new_with_payer(&[instruction], Some(&payer.pubkey()));
-    transaction.sign(&[&payer, &provider_authority], recent_blockhash);
-    let err = banks_client
-        .process_transaction(transaction)
-        .await
-        .unwrap_err();
+    let err = submit_tx_expect_err(
+        &mut banks_client,
+        &payer,
+        &[instruction],
+        &[&provider_authority],
+    )
+    .await;
     assert_eq!(
-        err.unwrap(),
+        err,
         TransactionError::InstructionError(
             0,
             InstructionError::Custom(EntropyError::InvalidAccount as u32)

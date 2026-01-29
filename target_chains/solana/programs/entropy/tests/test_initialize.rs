@@ -8,26 +8,19 @@ use {
         pda::{config_pda, pyth_fee_vault_pda},
     },
     solana_program::{pubkey::Pubkey, system_program},
-    solana_program_test::{processor, ProgramTest},
     solana_sdk::{
         instruction::InstructionError,
         rent::Rent,
         signature::Signer,
-        transaction::{Transaction, TransactionError},
+        transaction::TransactionError,
     },
-    test_utils::{build_initialize_ix, submit_tx},
+    test_utils::{build_initialize_ix, new_entropy_program_test, submit_tx, submit_tx_expect_err},
 };
 
 #[tokio::test]
 async fn test_initialize_happy_path() {
     let program_id = Pubkey::new_unique();
-    let (mut banks_client, payer, _) = ProgramTest::new(
-        "entropy",
-        program_id,
-        processor!(entropy::processor::process_instruction),
-    )
-    .start()
-    .await;
+    let (mut banks_client, payer, _) = new_entropy_program_test(program_id).start().await;
 
     let admin = Pubkey::new_unique();
     let default_provider = Pubkey::new_unique();
@@ -74,13 +67,7 @@ async fn test_initialize_happy_path() {
 #[tokio::test]
 async fn test_initialize_records_prefunded_fee_vault() {
     let program_id = Pubkey::new_unique();
-    let (mut banks_client, payer, _) = ProgramTest::new(
-        "entropy",
-        program_id,
-        processor!(entropy::processor::process_instruction),
-    )
-    .start()
-    .await;
+    let (mut banks_client, payer, _) = new_entropy_program_test(program_id).start().await;
 
     let (fee_vault_address, _) = pyth_fee_vault_pda(&program_id);
     let pre_fund_lamports = Rent::default().minimum_balance(0) + 42;
@@ -121,13 +108,7 @@ async fn test_initialize_records_prefunded_fee_vault() {
 #[tokio::test]
 async fn test_initialize_rejects_zero_admin() {
     let program_id = Pubkey::new_unique();
-    let (banks_client, payer, recent_blockhash) = ProgramTest::new(
-        "entropy",
-        program_id,
-        processor!(entropy::processor::process_instruction),
-    )
-    .start()
-    .await;
+    let (mut banks_client, payer, _) = new_entropy_program_test(program_id).start().await;
 
     let instruction = build_initialize_ix(
         program_id,
@@ -136,14 +117,9 @@ async fn test_initialize_rejects_zero_admin() {
         Pubkey::new_unique(),
         1,
     );
-    let mut transaction = Transaction::new_with_payer(&[instruction], Some(&payer.pubkey()));
-    transaction.sign(&[&payer], recent_blockhash);
-    let err = banks_client
-        .process_transaction(transaction)
-        .await
-        .unwrap_err();
+    let err = submit_tx_expect_err(&mut banks_client, &payer, &[instruction], &[]).await;
     assert_eq!(
-        err.unwrap(),
+        err,
         TransactionError::InstructionError(0, InstructionError::InvalidArgument)
     );
 }
@@ -151,13 +127,7 @@ async fn test_initialize_rejects_zero_admin() {
 #[tokio::test]
 async fn test_initialize_rejects_zero_default_provider() {
     let program_id = Pubkey::new_unique();
-    let (banks_client, payer, recent_blockhash) = ProgramTest::new(
-        "entropy",
-        program_id,
-        processor!(entropy::processor::process_instruction),
-    )
-    .start()
-    .await;
+    let (mut banks_client, payer, _) = new_entropy_program_test(program_id).start().await;
 
     let instruction = build_initialize_ix(
         program_id,
@@ -166,14 +136,9 @@ async fn test_initialize_rejects_zero_default_provider() {
         Pubkey::default(),
         1,
     );
-    let mut transaction = Transaction::new_with_payer(&[instruction], Some(&payer.pubkey()));
-    transaction.sign(&[&payer], recent_blockhash);
-    let err = banks_client
-        .process_transaction(transaction)
-        .await
-        .unwrap_err();
+    let err = submit_tx_expect_err(&mut banks_client, &payer, &[instruction], &[]).await;
     assert_eq!(
-        err.unwrap(),
+        err,
         TransactionError::InstructionError(0, InstructionError::InvalidArgument)
     );
 }

@@ -25,7 +25,9 @@ use crate::{
 };
 
 mod request;
+mod request_with_callback;
 pub use request::process_request;
+pub use request_with_callback::process_request_with_callback;
 
 fn request_helper<'a, 'info>(
     program_id: &Pubkey,

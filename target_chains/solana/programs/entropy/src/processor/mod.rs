@@ -1,12 +1,13 @@
 mod initialize;
 mod register_provider;
 mod request;
+mod reveal_with_callback;
 
 use solana_program::{account_info::AccountInfo, entrypoint::ProgramResult, pubkey::Pubkey};
 
 use self::{
     initialize::process_initialize, register_provider::process_register_provider,
-    request::process_request,
+    request::process_request, reveal_with_callback::process_reveal_with_callback,
 };
 use crate::{error::EntropyError, instruction::EntropyInstruction};
 
@@ -24,7 +25,9 @@ pub fn process_instruction(
         EntropyInstruction::Request => process_request(program_id, accounts, payload),
         EntropyInstruction::RequestWithCallback => Err(EntropyError::NotImplemented.into()),
         EntropyInstruction::Reveal => Err(EntropyError::NotImplemented.into()),
-        EntropyInstruction::RevealWithCallback => Err(EntropyError::NotImplemented.into()),
+        EntropyInstruction::RevealWithCallback => {
+            process_reveal_with_callback(program_id, accounts, payload)
+        }
         EntropyInstruction::AdvanceProviderCommitment => Err(EntropyError::NotImplemented.into()),
         EntropyInstruction::UpdateProviderConfig => Err(EntropyError::NotImplemented.into()),
         EntropyInstruction::WithdrawProviderFees => Err(EntropyError::NotImplemented.into()),

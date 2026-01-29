@@ -83,3 +83,12 @@ pub struct RequestArgs {
     pub _padding0: [u8; 3],
     pub compute_unit_limit: u32,
 }
+
+#[derive(Clone, Copy, Pod, Zeroable)]
+#[repr(C)]
+pub struct RevealArgs {
+    pub provider: PubkeyBytes,
+    pub sequence_number: u64,
+    pub user_contribution: [u8; 32],
+    pub provider_contribution: [u8; 32],
+}

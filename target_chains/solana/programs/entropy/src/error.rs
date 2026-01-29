@@ -15,6 +15,12 @@ pub enum EntropyError {
     OutOfRandomness = 4,
     #[error("last revealed too old")]
     LastRevealedTooOld = 5,
+    #[error("incorrect revelation")]
+    IncorrectRevelation = 6,
+    #[error("blockhash unavailable")]
+    BlockhashUnavailable = 7,
+    #[error("invalid reveal call")]
+    InvalidRevealCall = 8,
 }
 
 impl From<EntropyError> for solana_program::program_error::ProgramError {

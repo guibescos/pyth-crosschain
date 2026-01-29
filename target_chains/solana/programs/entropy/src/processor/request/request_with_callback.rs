@@ -38,7 +38,6 @@ pub fn process_request_with_callback(
     let config_account = next_account_info(&mut account_info_iter)?;
     let pyth_fee_vault = next_account_info(&mut account_info_iter)?;
     let system_program_account = next_account_info(&mut account_info_iter)?;
-    let callback_program = next_account_info(&mut account_info_iter)?;
 
     if !requester_signer.is_signer || !payer.is_signer || !request_account.is_signer {
         return Err(ProgramError::MissingRequiredSignature);
@@ -54,10 +53,6 @@ pub fn process_request_with_callback(
     }
 
     if system_program_account.key != &system_program::ID {
-        return Err(EntropyError::InvalidAccount.into());
-    }
-
-    if callback_program.key != requester_program.key {
         return Err(EntropyError::InvalidAccount.into());
     }
 

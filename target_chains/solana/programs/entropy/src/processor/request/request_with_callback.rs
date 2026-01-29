@@ -133,23 +133,9 @@ pub fn process_request_with_callback(
         for (index, meta) in args.callback_accounts.iter().enumerate() {
             request.callback_accounts[index] = *meta;
         }
-        for meta in request
-            .callback_accounts
-            .iter_mut()
-            .skip(args.callback_accounts.len())
-        {
-            *meta = CallbackMeta {
-                pubkey: [0u8; 32],
-                is_signer: 0,
-                is_writable: 0,
-            };
-        }
-
         let data_len = args.callback_ix_data.len();
         request.callback_ix_data[..data_len].copy_from_slice(&args.callback_ix_data);
-        for byte in request.callback_ix_data.iter_mut().skip(data_len) {
-            *byte = 0;
-        }
+
     }
 
     set_return_data(&sequence_number.to_le_bytes());

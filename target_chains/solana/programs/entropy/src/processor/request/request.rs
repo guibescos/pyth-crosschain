@@ -1,23 +1,16 @@
-use std::cell::RefMut;
 
-use bytemuck::{from_bytes_mut, try_from_bytes};
+use bytemuck::try_from_bytes;
 use solana_program::{
     account_info::{next_account_info, AccountInfo},
     entrypoint::ProgramResult,
-    hash::hashv,
-    program::{invoke, set_return_data},
+    program::set_return_data,
     program_error::ProgramError,
-    pubkey::Pubkey,
-    system_instruction, system_program,
-    sysvar::{clock::Clock, rent::Rent, Sysvar},
+    pubkey::Pubkey, system_program,
 };
 
 use crate::{
-    accounts::{CallbackMeta, Config, Provider, Request},
-    constants::{
-        CALLBACK_IX_DATA_LEN, CALLBACK_NOT_NECESSARY, MAX_CALLBACK_ACCOUNTS, REQUESTER_SIGNER_SEED,
-    },
-    discriminator::request_discriminator,
+    accounts::{Config, Provider},
+    constants::REQUESTER_SIGNER_SEED,
     error::EntropyError,
     instruction::RequestArgs,
     pda::{config_pda, provider_pda, provider_vault_pda, pyth_fee_vault_pda},
@@ -107,7 +100,7 @@ pub fn process_request(
 
     let sequence_number = request_helper(
         program_id,
-        &args,
+        args,
         &config,
         &mut provider,
         payer,

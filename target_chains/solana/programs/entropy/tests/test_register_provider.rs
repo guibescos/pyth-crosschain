@@ -1,25 +1,21 @@
 mod test_utils;
 
 use {
-    bytemuck::try_from_bytes,
-    entropy::{
+    crate::test_utils::register_args::build_register_args_with_metadata, bytemuck::try_from_bytes, entropy::{
         accounts::Provider,
         discriminator::provider_discriminator,
         error::EntropyError,
         pda::{provider_pda, provider_vault_pda},
-    },
-    solana_program::{pubkey::Pubkey, system_program},
-    solana_sdk::{
+    }, solana_program::{pubkey::Pubkey, system_program}, solana_sdk::{
         account::Account,
         instruction::InstructionError,
         rent::Rent,
         signature::{Keypair, Signer},
         transaction::TransactionError,
-    },
-    test_utils::{
-        build_register_args_with_metadata, build_register_provider_ix, initialize_config,
+    }, test_utils::{
+        build_register_provider_ix, initialize_config,
         new_entropy_program_test, submit_tx, submit_tx_expect_err,
-    },
+    }
 };
 
 #[tokio::test]

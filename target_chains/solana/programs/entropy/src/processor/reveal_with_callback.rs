@@ -10,7 +10,6 @@ use solana_program::{
     system_program,
     sysvar::{slot_hashes, slot_hashes::SlotHashes, Sysvar},
 };
-use std::cell::RefMut;
 
 use crate::{
     accounts::{Provider, Request},

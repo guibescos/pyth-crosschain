@@ -1,27 +1,22 @@
 use std::cell::RefMut;
 
-use bytemuck::{from_bytes_mut, try_from_bytes};
+use bytemuck::from_bytes_mut;
 use solana_program::{
-    account_info::{next_account_info, AccountInfo},
-    entrypoint::ProgramResult,
+    account_info::AccountInfo,
     hash::hashv,
-    program::{invoke, set_return_data},
+    program::invoke,
     program_error::ProgramError,
     pubkey::Pubkey,
-    system_instruction, system_program,
+    system_instruction,
     sysvar::{clock::Clock, rent::Rent, Sysvar},
 };
 
 use crate::{
-    accounts::{CallbackMeta, Config, Provider, Request},
-    constants::{
-        CALLBACK_IX_DATA_LEN, CALLBACK_NOT_NECESSARY, MAX_CALLBACK_ACCOUNTS, REQUESTER_SIGNER_SEED,
-    },
+    accounts::{Config, Provider, Request},
+    constants::CALLBACK_NOT_NECESSARY,
     discriminator::request_discriminator,
     error::EntropyError,
     instruction::RequestArgs,
-    pda::{config_pda, provider_pda, provider_vault_pda, pyth_fee_vault_pda},
-    pda_loader::{load_account, load_account_mut},
 };
 
 mod request;

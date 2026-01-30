@@ -1,17 +1,13 @@
 mod test_utils;
 
 use {
-    bytemuck::try_from_bytes,
-    entropy::{
+    crate::test_utils::instructions::build_initialize_ix, bytemuck::try_from_bytes, entropy::{
         accounts::Config,
         discriminator::config_discriminator,
         pda::{config_pda, pyth_fee_vault_pda},
-    },
-    solana_program::{pubkey::Pubkey, system_program},
-    solana_sdk::{
+    }, solana_program::{pubkey::Pubkey, system_program}, solana_sdk::{
         instruction::InstructionError, rent::Rent, signature::Signer, transaction::TransactionError,
-    },
-    test_utils::{build_initialize_ix, new_entropy_program_test, submit_tx, submit_tx_expect_err},
+    }, test_utils::{new_entropy_program_test, submit_tx, submit_tx_expect_err}
 };
 
 #[tokio::test]

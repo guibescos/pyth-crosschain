@@ -2,6 +2,10 @@ use std::{
     collections::HashSet,
     path::PathBuf,
     str::FromStr,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
     thread::sleep,
     time::Duration,
 };
@@ -36,6 +40,9 @@ use solana_transaction_status::{
     EncodedTransaction, UiCompiledInstruction, UiInstruction, UiMessage, UiTransaction,
     UiTransactionEncoding,
 };
+use owo_colors::OwoColorize;
+use tracing::{error, info, warn};
+use tracing_subscriber::EnvFilter;
 use bytemuck::{cast_slice, Pod, Zeroable};
 use entropy::{
     constants::REQUESTER_SIGNER_SEED,
@@ -48,6 +55,35 @@ use solana_sdk::{
 #[allow(deprecated)]
 use solana_sdk::{system_instruction, system_program};
 const DEFAULT_CALLBACK_COMPUTE_UNITS: u32 = 200_000;
+
+fn init_tracing() {
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+    tracing_subscriber::fmt()
+        .with_env_filter(filter)
+        .with_target(false)
+        .compact()
+        .init();
+}
+
+fn print_info(message: impl std::fmt::Display) {
+    println!("{} {}", "[info]".blue().bold(), message);
+}
+
+fn print_success(message: impl std::fmt::Display) {
+    println!("{} {}", "[ok]".green().bold(), message);
+}
+
+fn print_warn(message: impl std::fmt::Display) {
+    println!("{} {}", "[warn]".yellow().bold(), message);
+}
+
+fn print_error(message: impl std::fmt::Display) {
+    eprintln!("{} {}", "[error]".red().bold(), message);
+}
+
+fn print_kv(label: &str, value: impl std::fmt::Display) {
+    println!("  {} {}", label.dimmed(), value);
+}
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
@@ -509,14 +545,22 @@ fn handle_provide(args: ProvideArgs) -> Result<()> {
     let entropy_program_id = Pubkey::from_str(entropy_program_id)
         .with_context(|| format!("Invalid entropy program id: {}", entropy_program_id))?;
 
-    println!("rpc url: {}", args.shared.rpc_url);
-    println!("keypair: {}", keypair_path.display());
-    println!("commitment: {:?}", commitment.commitment);
-    println!("program id: {}", entropy_program_id);
+    print_info("Starting provider mode");
+    print_kv("rpc url:", &args.shared.rpc_url);
+    print_kv("keypair:", keypair_path.display());
+    print_kv("commitment:", format!("{:?}", commitment.commitment));
+    print_kv("program id:", entropy_program_id);
+
+    let running = Arc::new(AtomicBool::new(true));
+    let shutdown = running.clone();
+    ctrlc::set_handler(move || {
+        shutdown.store(false, Ordering::SeqCst);
+    })
+    .context("Failed to set Ctrl-C handler")?;
 
     let (config_address, _) = config_pda(&entropy_program_id);
     if rpc_client.get_account(&config_address).is_err() {
-        println!("Initializing entropy config...");
+        print_info("Initializing entropy config...");
         let ix = build_initialize_ix(
             entropy_program_id,
             payer.pubkey(),
@@ -524,17 +568,19 @@ fn handle_provide(args: ProvideArgs) -> Result<()> {
             payer.pubkey(),
             0,
         );
-        send_and_confirm(&rpc_client, &payer, &[ix], commitment)?;
+      send_and_confirm(&rpc_client, &payer, &[ix], commitment)?;
+      print_success("Entropy config initialized");
     } else {
-        println!("Entropy config already initialized.");
+        print_info("Entropy config already initialized");
     }
 
     let chain_length = 256u64;
     let (commitment_value, chain) = build_chain(chain_length as usize);
     let register_args = build_register_args(commitment_value, chain_length);
     let register_ix = build_register_provider_ix(entropy_program_id, payer.pubkey(), register_args);
-    println!("Registering provider...");
+    print_info("Registering provider...");
     send_and_confirm(&rpc_client, &payer, &[register_ix], commitment)?;
+    print_success("Provider registered");
 
     let (provider_account, _) = provider_pda(&entropy_program_id, &payer.pubkey());
     let provider_data = rpc_client
@@ -549,13 +595,14 @@ fn handle_provide(args: ProvideArgs) -> Result<()> {
         current_sequence: provider.current_commitment_sequence_number,
     };
 
-    println!("Provider authority: {}", payer.pubkey());
-    println!("Provider account: {}", provider_account);
-    println!("Listening for request_with_callback...");
+    print_info("Provider ready");
+    print_kv("authority:", payer.pubkey());
+    print_kv("provider account:", provider_account);
+    print_info("Listening for request_with_callback...");
 
     let mut processed_signatures = HashSet::new();
     let mut last_seen: Option<String> = None;
-    loop {
+    while running.load(Ordering::SeqCst) {
         let signatures = rpc_client.get_signatures_for_address_with_config(
             &entropy_program_id,
             GetConfirmedSignaturesForAddress2Config {
@@ -567,7 +614,8 @@ fn handle_provide(args: ProvideArgs) -> Result<()> {
         let signatures = match signatures {
             Ok(sigs) => sigs,
             Err(err) => {
-                eprintln!("Failed to fetch signatures: {err}");
+                warn!(error = %err, "Failed to fetch signatures");
+                print_warn("Failed to fetch signatures; retrying");
                 sleep(Duration::from_secs(2));
                 continue;
             }
@@ -610,7 +658,7 @@ fn handle_provide(args: ProvideArgs) -> Result<()> {
             let tx = match tx {
                 Ok(tx) => tx,
                 Err(err) => {
-                    eprintln!("Failed to fetch transaction {signature_str}: {err}");
+                    warn!(signature = %signature_str, error = %err, "Failed to fetch transaction");
                     continue;
                 }
             };
@@ -625,19 +673,16 @@ fn handle_provide(args: ProvideArgs) -> Result<()> {
                 {
                     Ok(data) => data,
                     Err(_) => {
-                        // eprintln!(
-                        //     "Failed to fetch request {}: {err}",
-                        //     observation.request_account
-                        // );
                         continue;
                     }
                 };
                 let request = match try_from_bytes::<Request>(&request_data) {
                     Ok(request) => request,
                     Err(err) => {
-                        eprintln!(
-                            "Failed to parse request {}: {err}",
-                            observation.request_account
+                        warn!(
+                            request = %observation.request_account,
+                            error = %err,
+                            "Failed to parse request account"
                         );
                         continue;
                     }
@@ -660,12 +705,12 @@ fn handle_provide(args: ProvideArgs) -> Result<()> {
                 let num_hashes_usize = match usize::try_from(num_hashes) {
                     Ok(value) => value,
                     Err(_) => {
-                        eprintln!("Sequence number too large: {}", request.sequence_number);
+                        warn!(sequence = request.sequence_number, "Sequence number too large");
                         continue;
                     }
                 };
                 if num_hashes_usize > provider_chain.current_index {
-                    eprintln!("Out of provider randomness. Re-register provider.");
+                    print_warn("Out of provider randomness. Re-register provider.");
                     continue;
                 }
 
@@ -693,10 +738,10 @@ fn handle_provide(args: ProvideArgs) -> Result<()> {
                     reveal_args,
                 );
 
-                println!(
+                print_info(format!(
                     "Revealing for request {} (sequence {})",
                     observation.request_account, request.sequence_number
-                );
+                ));
 
                 match send_and_confirm(&rpc_client, &payer, &[reveal_ix], commitment) {
                     Ok(signature) => {
@@ -705,7 +750,7 @@ fn handle_provide(args: ProvideArgs) -> Result<()> {
                         println!("Successful reveal!: {signature}");
                     }
                     Err(err) => {
-                        eprintln!("Failed to reveal: {err}");
+                        print_error(format!("Failed to reveal: {err}"));
                     }
                 }
             }
@@ -714,7 +759,7 @@ fn handle_provide(args: ProvideArgs) -> Result<()> {
         sleep(Duration::from_secs(2));
     }
 
-    #[allow(unreachable_code)]
+    print_info("Shutdown requested; exiting");
     Ok(())
 }
 
@@ -736,9 +781,17 @@ fn handle_request(args: RequestArgs) -> Result<()> {
     let requester_program_id = parse_pubkey(requester_program_id, "requester program id")?;
     let provider_id = parse_pubkey(&args.provider_id, "provider id")?;
 
-    let payer = read_keypair_file(&keypair_path).unwrap();
+    let payer = load_keypair(&keypair_path)?;
     let rpc_client =
         RpcClient::new_with_commitment(args.shared.rpc_url.clone(), commitment.clone());
+
+    print_info("Starting request mode");
+    print_kv("rpc url:", &args.shared.rpc_url);
+    print_kv("keypair:", keypair_path.display());
+    print_kv("commitment:", format!("{:?}", commitment.commitment));
+    print_kv("entropy program:", entropy_program_id);
+    print_kv("requester program:", requester_program_id);
+    print_kv("provider:", provider_id);
 
     let provider_account = rpc_client
         .get_account(&provider_id)
@@ -765,6 +818,7 @@ fn handle_request(args: RequestArgs) -> Result<()> {
     let request_account = Keypair::new();
     let callback_state = Keypair::new();
 
+    print_info("Creating callback state account");
     let callback_state_rent = rpc_client
         .get_minimum_balance_for_rent_exemption(CALLBACK_STATE_LEN)
         .context("Failed to fetch rent exemption for callback state")?;
@@ -829,6 +883,7 @@ fn handle_request(args: RequestArgs) -> Result<()> {
     let blockhash = rpc_client.get_latest_blockhash()?;
     transaction.sign(&[&payer, &callback_state, &request_account], blockhash);
 
+    print_info("Submitting request_with_callback transaction");
     let signature = rpc_client
         .send_and_confirm_transaction_with_spinner_and_config(
             &transaction,
@@ -841,22 +896,35 @@ fn handle_request(args: RequestArgs) -> Result<()> {
         )
         .context("Request transaction failed")?;
 
-    println!("request signature: {signature}");
-    println!("request account: {}", request_account.pubkey());
-    println!("callback state: {}", callback_state.pubkey());
-    println!("requester signer: {requester_signer}");
-    println!("provider vault: {provider_vault}");
-    println!("config: {config_account}");
-    println!("pyth fee vault: {pyth_fee_vault}");
+    print_success("Request submitted");
+    print_kv("request signature:", signature);
+    print_kv("request account:", request_account.pubkey());
+    print_kv("callback state:", callback_state.pubkey());
+    print_kv("requester signer:", requester_signer);
+    print_kv("provider vault:", provider_vault);
+    print_kv("config:", config_account);
+    print_kv("pyth fee vault:", pyth_fee_vault);
 
     Ok(())
 }
 
 fn main() -> Result<()> {
+    init_tracing();
     let cli = Cli::parse();
 
-    match cli.command {
+    let result = match cli.command {
         Command::Provide(args) => handle_provide(args),
         Command::Request(args) => handle_request(args),
+    };
+
+    if let Err(err) = result {
+        print_error(format!("Command failed: {err}"));
+        for (index, cause) in err.chain().skip(1).enumerate() {
+            print_error(format!("  {}: {}", index + 1, cause));
+        }
+        error!(error = %err, "Command failed");
+        std::process::exit(1);
     }
+
+    Ok(())
 }

@@ -346,7 +346,7 @@ Accounts:
 - `[writable]` provider PDA
 - `slot_hashes` sysvar (readonly)
 - `[readonly]` entropy_signer (PDA of entropy program)
-- `[readonly]` callback_program (if callback required)
+- `[readonly]` callback_program (must equal `requester_program_id`)
 - `system_program` (for close)
 - `[writable]` payer (must match request.payer)
 - `callback accounts` (remaining accounts; must match stored `callback_accounts`)
@@ -362,8 +362,7 @@ Behavior:
 - Verify commitment and compute random number.
 - `entropy_signer` must match `find_program_address(["entropy_signer"], entropy_program_id)` and
   is used as the signing PDA for the CPI.
-- If `requester_program_id` is non-zero, `callback_program` must equal it; otherwise the
-  program accepts any callback program id.
+- `callback_program` must equal `requester_program_id`, even if `requester_program_id` is zero.
 - Verify the remaining accounts match the stored `callback_accounts` (pubkey + signer + writable).
 - If `compute_unit_limit != 0`, CPI into the callback program with instruction data
   `callback_ix_data || entropy_callback_payload`, where the payload encodes

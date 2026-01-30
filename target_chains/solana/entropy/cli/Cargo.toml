@@ -7,6 +7,10 @@ description = "Entropy CLI tool"
 
 [dependencies]
 anyhow = "1.0.86"
+bytemuck = { workspace = true }
 clap = { version = "4.5.26", features = ["derive"] }
+entropy = { workspace = true }
 shellexpand = "2.1.2"
+simple-requester = { path = "../programs/simple-requester" }
+solana-client = "2.3.0"
 solana-sdk = "2.3.0"

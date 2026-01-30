@@ -1397,6 +1397,7 @@ dependencies = [
  "entropy",
  "rand 0.8.5",
  "shellexpand",
+ "simple-requester",
  "solana-client",
  "solana-sdk",
  "solana-transaction-status",

@@ -1,14 +1,14 @@
 #[allow(deprecated)]
-use solana_program::{
-    account_info::{next_account_info, AccountInfo},
-    entrypoint::ProgramResult,
-    hash::{hash, hashv},
-    program::invoke_signed,
-    program_error::ProgramError,
-    pubkey::Pubkey,
-    system_program,
-    sysvar::{slot_hashes, slot_hashes::SlotHashes, Sysvar},
+use pinocchio::{
+    cpi::{invoke_signed_with_bounds, Seed, Signer, MAX_CPI_ACCOUNTS},
+    sysvars::{slot_hashes, slot_hashes::SlotHashes},
+    AccountView,
+    Address,
+    ProgramResult,
 };
+use pinocchio::error::ProgramError;
+use pinocchio_system as system_program;
+use solana_sha256_hasher::{hash, hashv};
 
 use crate::{
     accounts::{Provider, Request},
@@ -18,12 +18,12 @@ use crate::{
     load_account,
     pda::{entropy_signer_pda, provider_pda},
     pda_loader::load_account_mut,
-    processor::parse_args,
+    processor::{next_account_info, parse_args},
 };
 
 pub fn process_reveal_with_callback(
-    program_id: &Pubkey,
-    accounts: &[AccountInfo],
+    program_id: &Address,
+    accounts: &[AccountView],
     data: &[u8],
 ) -> ProgramResult {
     let args = parse_args::<RevealArgs>(data)?;
@@ -37,20 +37,20 @@ pub fn process_reveal_with_callback(
     let system_program_account = next_account_info(&mut account_info_iter)?;
     let payer_account = next_account_info(&mut account_info_iter)?;
 
-    if !request_account.is_writable || !provider_account.is_writable {
+    if !request_account.is_writable() || !provider_account.is_writable() {
         return Err(EntropyError::InvalidAccount.into());
     }
 
-    if system_program_account.key != &system_program::ID {
+    if system_program_account.address() != &system_program::ID {
         return Err(EntropyError::InvalidAccount.into());
     }
 
-    if slot_hashes_account.key != &slot_hashes::ID {
+    if slot_hashes_account.address() != &slot_hashes::SLOTHASHES_ID {
         return Err(EntropyError::InvalidAccount.into());
     }
 
     let (expected_entropy_signer, _bump) = entropy_signer_pda(program_id);
-    if entropy_signer_account.key != &expected_entropy_signer {
+    if entropy_signer_account.address() != &expected_entropy_signer {
         return Err(EntropyError::InvalidPda.into());
     }
 
@@ -60,10 +60,10 @@ pub fn process_reveal_with_callback(
         return Err(EntropyError::InvalidRevealCall.into());
     }
 
-    let request_provider = Pubkey::new_from_array(request.provider);
+    let request_provider = Address::new_from_array(request.provider);
 
     let (expected_provider, _provider_bump) = provider_pda(program_id, &request_provider);
-    if provider_account.key != &expected_provider {
+    if provider_account.address() != &expected_provider {
         return Err(EntropyError::InvalidPda.into());
     }
 
@@ -78,11 +78,12 @@ pub fn process_reveal_with_callback(
     }
 
     let blockhash = if request.use_blockhash == 1 {
-        let slot_hashes = SlotHashes::from_account_info(slot_hashes_account)?;
+        let slot_hashes = SlotHashes::from_account_view(slot_hashes_account)?;
         slot_hashes
+            .entries()
             .iter()
-            .find(|(slot, _)| *slot == request.request_slot)
-            .map(|(_, hash)| hash.to_bytes())
+            .find(|entry| entry.slot() == request.request_slot)
+            .map(|entry| entry.hash)
             .ok_or(EntropyError::BlockhashUnavailable)?
     } else {
         [0u8; 32]
@@ -100,8 +101,8 @@ pub fn process_reveal_with_callback(
         provider.current_commitment = args.provider_contribution;
     }
 
-    let requester_program_id = Pubkey::new_from_array(request.requester_program_id);
-    if callback_program.key != &requester_program_id {
+    let requester_program_id = Address::new_from_array(request.requester_program_id);
+    if callback_program.address() != &requester_program_id {
         return Err(EntropyError::InvalidAccount.into());
     }
 
@@ -126,8 +127,8 @@ pub fn process_reveal_with_callback(
 
     if callback_compute_unit_limit != 0 && request.callback_status == CALLBACK_NOT_STARTED {
         let callback_ix = build_callback_ix(
-            callback_program.key,
-            entropy_signer_account.key,
+            callback_program.address(),
+            entropy_signer_account.address(),
             callback_accounts,
             callback_ix_data_len,
             &callback_ix_data,
@@ -138,13 +139,21 @@ pub fn process_reveal_with_callback(
 
         // let callback_compute_units_before = sol_remaining_compute_units();
         let bump_seed = [_bump];
-        let signer_seeds: &[&[u8]] = &[ENTROPY_SIGNER_SEED, &bump_seed];
+        let signer_seeds = [
+            Seed::from(ENTROPY_SIGNER_SEED),
+            Seed::from(&bump_seed),
+        ];
+        let signer = Signer::from(&signer_seeds);
         let mut callback_account_infos =
-            Vec::with_capacity(callback_accounts.len().saturating_add(2));
-        callback_account_infos.push(callback_program.clone());
-        callback_account_infos.push(entropy_signer_account.clone());
-        callback_account_infos.extend_from_slice(callback_accounts);
-        invoke_signed(&callback_ix, &callback_account_infos, &[signer_seeds])?;
+            Vec::with_capacity(callback_accounts.len().saturating_add(1));
+        callback_account_infos.push(entropy_signer_account);
+        callback_account_infos.extend(callback_accounts);
+        let instruction = callback_ix.as_instruction();
+        invoke_signed_with_bounds::<{ MAX_CPI_ACCOUNTS }>(
+            &instruction,
+            &callback_account_infos,
+            &[signer],
+        )?;
         // let callback_compute_units_after: u64 = sol_remaining_compute_units();
         // let callback_compute_units_spent =
         //     callback_compute_units_before.saturating_sub(callback_compute_units_after);
@@ -154,7 +163,9 @@ pub fn process_reveal_with_callback(
         // }
     }
 
-    if payer_account.key != &Pubkey::new_from_array(request.payer) || !payer_account.is_writable {
+    if payer_account.address() != &Address::new_from_array(request.payer)
+        || !payer_account.is_writable()
+    {
         return Err(EntropyError::InvalidAccount.into());
     }
 
@@ -177,34 +188,50 @@ fn hash_provider_commitment(
 
 fn validate_callback_accounts(
     request: &Request,
-    callback_accounts: &[AccountInfo],
+    callback_accounts: &[AccountView],
 ) -> ProgramResult {
     for (index, account_info) in callback_accounts.iter().enumerate() {
         let expected = request.callback_accounts[index];
-        if account_info.key.to_bytes() != expected.pubkey {
+        if account_info.address().to_bytes() != expected.pubkey {
             return Err(EntropyError::InvalidAccount.into());
         }
-        if account_info.is_signer != (expected.is_signer == 1) {
+        if account_info.is_signer() != (expected.is_signer == 1) {
             return Err(EntropyError::InvalidAccount.into());
         }
-        if account_info.is_writable != (expected.is_writable == 1) {
+        if account_info.is_writable() != (expected.is_writable == 1) {
             return Err(EntropyError::InvalidAccount.into());
         }
     }
     Ok(())
 }
 
+struct CallbackInstruction<'a> {
+    program_id: &'a Address,
+    accounts: Vec<pinocchio::instruction::InstructionAccount<'a>>,
+    data: Vec<u8>,
+}
+
+impl<'a> CallbackInstruction<'a> {
+    fn as_instruction(&'a self) -> pinocchio::instruction::InstructionView<'a, 'a, 'a, 'a> {
+        pinocchio::instruction::InstructionView {
+            program_id: self.program_id,
+            accounts: &self.accounts,
+            data: &self.data,
+        }
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
-fn build_callback_ix(
-    program_id: &Pubkey,
-    entropy_signer: &Pubkey,
-    callback_accounts: &[AccountInfo],
+fn build_callback_ix<'a>(
+    program_id: &'a Address,
+    entropy_signer: &'a Address,
+    callback_accounts: &'a [AccountView],
     callback_ix_data_len: u16,
-    callback_ix_data: &[u8],
+    callback_ix_data: &'a [u8],
     sequence_number: u64,
     provider: [u8; 32],
     random_number: [u8; 32],
-) -> Result<solana_program::instruction::Instruction, ProgramError> {
+) -> Result<CallbackInstruction<'a>, ProgramError> {
     let prefix_len = usize::from(callback_ix_data_len);
     if prefix_len > callback_ix_data.len() {
         return Err(ProgramError::InvalidInstructionData);
@@ -215,33 +242,30 @@ fn build_callback_ix(
     data.extend_from_slice(&sequence_number.to_le_bytes());
     data.extend_from_slice(&provider);
     data.extend_from_slice(&random_number);
-
     let mut metas = Vec::with_capacity(callback_accounts.len().saturating_add(1));
-    metas.push(solana_program::instruction::AccountMeta {
-        pubkey: *entropy_signer,
-        is_signer: true,
-        is_writable: false,
-    });
-    metas.extend(
-        callback_accounts
-            .iter()
-            .map(|info| solana_program::instruction::AccountMeta {
-                pubkey: *info.key,
-                is_signer: info.is_signer,
-                is_writable: info.is_writable,
-            }),
-    );
+    metas.push(pinocchio::instruction::InstructionAccount::new(
+        entropy_signer,
+        false,
+        true,
+    ));
+    metas.extend(callback_accounts.iter().map(|info| {
+        pinocchio::instruction::InstructionAccount::new(
+            info.address(),
+            info.is_writable(),
+            info.is_signer(),
+        )
+    }));
 
-    Ok(solana_program::instruction::Instruction {
-        program_id: *program_id,
+    Ok(CallbackInstruction {
+        program_id,
         accounts: metas,
         data,
     })
 }
 
 fn close_request_account(
-    request_account: &AccountInfo,
-    refund_account: &AccountInfo,
+    request_account: &AccountView,
+    refund_account: &AccountView,
 ) -> ProgramResult {
     let lamports = request_account.lamports();
     let refund_lamports = refund_account
@@ -249,7 +273,7 @@ fn close_request_account(
         .checked_add(lamports)
         .ok_or(ProgramError::InvalidArgument)?;
 
-    **request_account.try_borrow_mut_lamports()? = 0;
-    **refund_account.try_borrow_mut_lamports()? = refund_lamports;
+    request_account.set_lamports(0);
+    refund_account.set_lamports(refund_lamports);
     Ok(())
 }

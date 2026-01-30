@@ -1,11 +1,7 @@
 #[allow(deprecated)]
-use solana_program::{
-    account_info::{next_account_info, AccountInfo},
-    entrypoint::ProgramResult,
-    program_error::ProgramError,
-    pubkey::Pubkey,
-    system_program,
-};
+use pinocchio::{AccountView, Address, ProgramResult};
+use pinocchio::error::ProgramError;
+use pinocchio_system as system_program;
 
 use crate::{
     accounts::Provider,
@@ -15,13 +11,13 @@ use crate::{
     instruction::RegisterProviderArgs,
     pda::{provider_pda, provider_vault_pda},
     pda_loader::{init_pda_mut, load_account_mut},
-    processor::parse_args,
+    processor::{next_account_info, parse_args},
     vault::init_vault_pda,
 };
 
 pub fn process_register_provider(
-    program_id: &Pubkey,
-    accounts: &[AccountInfo],
+    program_id: &Address,
+    accounts: &[AccountView],
     data: &[u8],
 ) -> ProgramResult {
     let args = parse_args::<RegisterProviderArgs>(data)?;
@@ -42,32 +38,34 @@ pub fn process_register_provider(
     let provider_vault = next_account_info(&mut account_info_iter)?;
     let system_program_account = next_account_info(&mut account_info_iter)?;
 
-    if !provider_authority.is_signer {
+    if !provider_authority.is_signer() {
         return Err(ProgramError::MissingRequiredSignature);
     }
 
-    if !provider_authority.is_writable
-        || !provider_account.is_writable
-        || !provider_vault.is_writable
+    if !provider_authority.is_writable()
+        || !provider_account.is_writable()
+        || !provider_vault.is_writable()
     {
         return Err(EntropyError::InvalidAccount.into());
     }
 
-    if system_program_account.key != &system_program::ID {
+    if system_program_account.address() != &system_program::ID {
         return Err(EntropyError::InvalidAccount.into());
     }
 
-    let (expected_provider, provider_bump) = provider_pda(program_id, provider_authority.key);
-    if provider_account.key != &expected_provider {
+    let (expected_provider, provider_bump) =
+        provider_pda(program_id, provider_authority.address());
+    if provider_account.address() != &expected_provider {
         return Err(EntropyError::InvalidPda.into());
     }
 
-    let (expected_vault, _vault_bump) = provider_vault_pda(program_id, provider_authority.key);
-    if provider_vault.key != &expected_vault {
+    let (expected_vault, _vault_bump) =
+        provider_vault_pda(program_id, provider_authority.address());
+    if provider_vault.address() != &expected_vault {
         return Err(EntropyError::InvalidPda.into());
     }
 
-    let mut provider = if provider_account.owner == &system_program::ID {
+    let mut provider = if provider_account.owned_by(&system_program::ID) {
         init_pda_mut::<Provider>(
             program_id,
             provider_authority,
@@ -75,14 +73,14 @@ pub fn process_register_provider(
             system_program_account,
             &[
                 PROVIDER_SEED,
-                provider_authority.key.as_ref(),
+                provider_authority.address().as_ref(),
                 &[provider_bump],
             ],
             Provider::LEN,
         )?
     } else {
         let provider = load_account_mut::<Provider>(provider_account, program_id)?;
-        if provider.provider_authority != provider_authority.key.to_bytes() {
+        if provider.provider_authority != provider_authority.address().to_bytes() {
             return Err(EntropyError::InvalidAccount.into());
         }
         provider
@@ -91,7 +89,7 @@ pub fn process_register_provider(
     init_vault_pda(provider_authority, provider_vault, system_program_account)?;
 
     provider.discriminator = provider_discriminator();
-    provider.provider_authority = provider_authority.key.to_bytes();
+    provider.provider_authority = provider_authority.address().to_bytes();
 
     provider.fee_lamports = args.fee_lamports;
     provider.original_commitment = args.commitment;

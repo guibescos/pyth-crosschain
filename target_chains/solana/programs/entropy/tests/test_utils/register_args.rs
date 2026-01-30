@@ -3,6 +3,7 @@ use entropy::{
     instruction::RegisterProviderArgs,
 };
 
+#[allow(dead_code)]
 pub fn build_register_args_with_metadata(
     fee_lamports: u64,
     commitment: [u8; 32],
@@ -32,6 +33,7 @@ pub fn build_register_args_with_metadata(
     }
 }
 
+#[allow(dead_code)]
 pub fn build_register_args(
     fee_lamports: u64,
     commitment: [u8; 32],

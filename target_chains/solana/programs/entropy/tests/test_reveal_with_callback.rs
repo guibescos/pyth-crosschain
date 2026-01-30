@@ -1,5 +1,6 @@
 mod test_utils;
 
+#[allow(deprecated)]
 use {
     bytemuck::{bytes_of, cast_slice, try_from_bytes, Pod, Zeroable},
     entropy::{

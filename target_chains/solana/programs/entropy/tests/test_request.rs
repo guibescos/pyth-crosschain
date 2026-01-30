@@ -1,5 +1,6 @@
 mod test_utils;
 
+#[allow(deprecated)]
 use {
     bytemuck::{bytes_of, try_from_bytes},
     entropy::{
@@ -110,6 +111,7 @@ mod requester_program {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn build_requester_request_ix(
     requester_program_id: Pubkey,
     entropy_program_id: Pubkey,

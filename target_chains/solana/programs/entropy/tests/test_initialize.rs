@@ -1,5 +1,6 @@
 mod test_utils;
 
+#[allow(deprecated)]
 use {
     crate::test_utils::instructions::build_initialize_ix,
     bytemuck::try_from_bytes,
@@ -87,7 +88,7 @@ async fn test_initialize_records_prefunded_fee_vault() {
     submit_tx(&mut banks_client, &payer, &[instruction], &[]).await;
 
     let (config_address, _) = config_pda(&program_id);
-    let config_account = banks_client
+    let _config_account = banks_client
         .get_account(config_address)
         .await
         .unwrap()

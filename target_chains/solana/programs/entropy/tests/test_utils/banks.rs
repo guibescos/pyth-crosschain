@@ -12,6 +12,7 @@ use {
 
 use super::instructions::build_initialize_ix;
 
+#[allow(dead_code)]
 pub async fn initialize_config(
     banks_client: &mut BanksClient,
     payer: &Keypair,

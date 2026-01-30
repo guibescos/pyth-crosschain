@@ -12,6 +12,13 @@ crate-type = ["cdylib", "lib"]
 default = []
 no-entrypoint = []
 
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = [
+  "cfg(feature, values(\"custom-heap\"))",
+  "cfg(feature, values(\"custom-panic\"))",
+  "cfg(target_os, values(\"solana\"))",
+] }
+
 [dependencies]
 bytemuck = { version = "1.13.1", features = ["derive"] }
 solana-program = "2.3.0"

@@ -1,6 +1,7 @@
 use std::cell::RefMut;
 
 use bytemuck::from_bytes_mut;
+#[allow(deprecated)]
 use solana_program::{
     account_info::AccountInfo,
     hash::hashv,
@@ -19,11 +20,13 @@ use crate::{
     instruction::RequestArgs,
 };
 
+#[allow(clippy::module_inception)]
 mod request;
 mod request_with_callback;
 pub use request::process_request;
 pub use request_with_callback::process_request_with_callback;
 
+#[allow(clippy::too_many_arguments)]
 fn request_helper<'a, 'info>(
     program_id: &Pubkey,
     args: &RequestArgs,

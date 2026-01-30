@@ -1,3 +1,4 @@
+#[allow(deprecated)]
 use solana_program::{
     account_info::AccountInfo,
     entrypoint::ProgramResult,

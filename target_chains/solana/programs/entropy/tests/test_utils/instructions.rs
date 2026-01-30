@@ -1,3 +1,4 @@
+#[allow(deprecated)]
 use {
     bytemuck::bytes_of,
     entropy::{
@@ -41,6 +42,7 @@ pub fn build_initialize_ix(
     }
 }
 
+#[allow(dead_code)]
 pub fn build_register_provider_ix(
     program_id: Pubkey,
     provider_authority: Pubkey,

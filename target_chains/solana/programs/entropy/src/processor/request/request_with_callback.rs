@@ -1,4 +1,5 @@
 use bytemuck::{try_cast_slice, try_from_bytes, Pod, Zeroable};
+#[allow(deprecated)]
 use solana_program::{
     account_info::{next_account_info, AccountInfo},
     entrypoint::ProgramResult,

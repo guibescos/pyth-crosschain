@@ -1,6 +1,7 @@
 use std::cell::{Ref, RefMut};
 
 use bytemuck::from_bytes_mut;
+#[allow(deprecated)]
 use solana_program::{
     account_info::AccountInfo,
     program::{invoke, invoke_signed},

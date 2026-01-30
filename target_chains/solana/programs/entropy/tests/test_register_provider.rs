@@ -1,5 +1,6 @@
 mod test_utils;
 
+#[allow(deprecated)]
 use {
     crate::test_utils::register_args::build_register_args_with_metadata,
     bytemuck::try_from_bytes,

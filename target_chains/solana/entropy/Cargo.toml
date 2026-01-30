@@ -1,5 +1,5 @@
 [workspace]
-members = ["programs/entropy", "programs/simple-requester"]
+members = ["cli", "programs/entropy", "programs/simple-requester"]
 resolver = "2"
 
 [workspace.dependencies]

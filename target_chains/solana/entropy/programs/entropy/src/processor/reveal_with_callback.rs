@@ -1,7 +1,6 @@
 #[allow(deprecated)]
 use solana_program::{
     account_info::{next_account_info, AccountInfo},
-    compute_units::sol_remaining_compute_units,
     entrypoint::ProgramResult,
     hash::{hash, hashv},
     program::invoke_signed,

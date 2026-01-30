@@ -8,6 +8,7 @@ use {
         account_info::{next_account_info, AccountInfo},
         entrypoint::ProgramResult,
         instruction::{AccountMeta, Instruction},
+        msg,
         program::invoke_signed,
         program_error::ProgramError,
         pubkey::Pubkey,
@@ -234,6 +235,11 @@ fn process_callback(
     let random_number = data[72..104]
         .try_into()
         .map_err(|_| ProgramError::InvalidInstructionData)?;
+
+    let mut rand_bytes = [0u8; 8];
+    rand_bytes.copy_from_slice(&random_number[..8]);
+    let random_value = u64::from_le_bytes(rand_bytes) % 101;
+    msg!("Random number (0-100): {}", random_value);
 
     let mut state_data = callback_state.try_borrow_mut_data()?;
     let state = bytemuck::from_bytes_mut::<CallbackState>(&mut state_data);

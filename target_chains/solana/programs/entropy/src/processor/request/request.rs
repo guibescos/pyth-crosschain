@@ -1,11 +1,11 @@
-
 use bytemuck::try_from_bytes;
 use solana_program::{
     account_info::{next_account_info, AccountInfo},
     entrypoint::ProgramResult,
     program::set_return_data,
     program_error::ProgramError,
-    pubkey::Pubkey, system_program,
+    pubkey::Pubkey,
+    system_program,
 };
 
 use crate::{

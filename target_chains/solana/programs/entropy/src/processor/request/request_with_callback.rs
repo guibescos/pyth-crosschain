@@ -106,6 +106,12 @@ pub fn process_request_with_callback(
         return Err(EntropyError::InvalidAccount.into());
     }
 
+    for meta in args.callback_accounts {
+        if meta.is_signer > 1 || meta.is_writable > 1 {
+            return Err(ProgramError::InvalidInstructionData);
+        }
+    }
+
     let user_commitment = hash(&args.user_randomness).to_bytes();
     let request_args = RequestArgs {
         user_commitment,
@@ -189,11 +195,6 @@ fn parse_request_with_callback_args<'a>(
     let (callback_accounts_bytes, rest) = rest.split_at(callback_accounts_bytes_len);
     let callback_accounts = try_cast_slice::<u8, CallbackMeta>(callback_accounts_bytes)
         .map_err(|_| ProgramError::InvalidInstructionData)?;
-    for meta in callback_accounts {
-        if meta.is_signer > 1 || meta.is_writable > 1 {
-            return Err(ProgramError::InvalidInstructionData);
-        }
-    }
 
     let (callback_ix_len_bytes, rest) = rest.split_at(4);
     let callback_ix_data_len = *try_from_bytes::<u32>(callback_ix_len_bytes)

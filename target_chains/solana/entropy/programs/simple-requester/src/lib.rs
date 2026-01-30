@@ -1,11 +1,11 @@
 use {
-    bytemuck::{bytes_of, try_from_bytes, Pod, Zeroable},
+    bytemuck::{Pod, Zeroable, bytes_of, try_from_bytes},
     entropy::{
         constants::{ENTROPY_SIGNER_SEED, REQUESTER_SIGNER_SEED},
         instruction::{EntropyInstruction, RequestArgs},
     },
     solana_program::{
-        account_info::{next_account_info, AccountInfo},
+        account_info::{AccountInfo, next_account_info},
         entrypoint::ProgramResult,
         instruction::{AccountMeta, Instruction},
         msg,
@@ -30,6 +30,9 @@ pub struct CallbackState {
 }
 
 pub const CALLBACK_STATE_LEN: usize = core::mem::size_of::<CallbackState>();
+
+#[cfg(not(feature = "no-entrypoint"))]
+solana_program::entrypoint!(process_instruction);
 
 pub fn process_instruction(
     program_id: &Pubkey,
@@ -232,7 +235,7 @@ fn process_callback(
     let provider = data[40..72]
         .try_into()
         .map_err(|_| ProgramError::InvalidInstructionData)?;
-    let random_number = data[72..104]
+    let random_number:[u8; 32] = data[72..104]
         .try_into()
         .map_err(|_| ProgramError::InvalidInstructionData)?;
 

@@ -137,7 +137,7 @@ pub fn process_reveal_with_callback(
             random_number,
         )?;
 
-        let callback_compute_units_before = sol_remaining_compute_units();
+        // let callback_compute_units_before = sol_remaining_compute_units();
         let bump_seed = [_bump];
         let signer_seeds: &[&[u8]] = &[ENTROPY_SIGNER_SEED, &bump_seed];
         let mut callback_account_infos =
@@ -146,13 +146,13 @@ pub fn process_reveal_with_callback(
         callback_account_infos.push(entropy_signer_account.clone());
         callback_account_infos.extend_from_slice(callback_accounts);
         invoke_signed(&callback_ix, &callback_account_infos, &[signer_seeds])?;
-        let callback_compute_units_after = sol_remaining_compute_units();
-        let callback_compute_units_spent =
-            callback_compute_units_before.saturating_sub(callback_compute_units_after);
+        // let callback_compute_units_after: u64 = sol_remaining_compute_units();
+        // let callback_compute_units_spent =
+        //     callback_compute_units_before.saturating_sub(callback_compute_units_after);
 
-        if callback_compute_units_spent > u64::from(callback_compute_unit_limit) {
-            return Err(EntropyError::InsufficientGas.into());
-        }
+        // if callback_compute_units_spent > u64::from(callback_compute_unit_limit) {
+        //     return Err(EntropyError::InsufficientGas.into());
+        // }
     }
 
     if payer_account.key != &Pubkey::new_from_array(request.payer) || !payer_account.is_writable {

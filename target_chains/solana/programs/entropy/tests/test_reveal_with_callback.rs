@@ -8,7 +8,9 @@ use {
         discriminator::{provider_discriminator, request_discriminator},
         error::EntropyError,
         instruction::{EntropyInstruction, RevealArgs},
-        pda::{config_pda, entropy_signer_pda, provider_pda, provider_vault_pda, pyth_fee_vault_pda},
+        pda::{
+            config_pda, entropy_signer_pda, provider_pda, provider_vault_pda, pyth_fee_vault_pda,
+        },
     },
     solana_program::{
         account_info::{next_account_info, AccountInfo},
@@ -29,8 +31,8 @@ use {
         transaction::TransactionError,
     },
     test_utils::{
-        build_register_args, build_register_provider_ix, initialize_config, new_entropy_program_test,
-        submit_tx, submit_tx_expect_err,
+        build_register_args, build_register_provider_ix, initialize_config,
+        new_entropy_program_test, submit_tx, submit_tx_expect_err,
     },
 };
 
@@ -466,8 +468,7 @@ async fn test_reveal_with_callback_flow() {
         .await
         .unwrap()
         .unwrap();
-    let callback_state =
-        bytemuck::from_bytes::<CallbackState>(&callback_state_account.data);
+    let callback_state = bytemuck::from_bytes::<CallbackState>(&callback_state_account.data);
 
     let expected_random = hashv(&[&user_randomness, &provider_contribution, &[0u8; 32]]).to_bytes();
     assert_eq!(callback_state.called, 1);
@@ -488,5 +489,6 @@ async fn test_reveal_with_callback_flow() {
     assert!(banks_client
         .get_account(request_account.pubkey())
         .await
-        .unwrap().is_none());
+        .unwrap()
+        .is_none());
 }

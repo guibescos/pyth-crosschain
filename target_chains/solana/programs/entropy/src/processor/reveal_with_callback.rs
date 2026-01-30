@@ -13,9 +13,13 @@ use solana_program::{
 use std::cell::RefMut;
 
 use crate::{
-    accounts::{Provider, Request}, constants::{
-        CALLBACK_NOT_STARTED, ENTROPY_SIGNER_SEED, MAX_CALLBACK_ACCOUNTS,
-    }, error::EntropyError, instruction::RevealArgs, load_account, pda::{entropy_signer_pda, provider_pda}, pda_loader::load_account_mut
+    accounts::{Provider, Request},
+    constants::{CALLBACK_NOT_STARTED, ENTROPY_SIGNER_SEED, MAX_CALLBACK_ACCOUNTS},
+    error::EntropyError,
+    instruction::RevealArgs,
+    load_account,
+    pda::{entropy_signer_pda, provider_pda},
+    pda_loader::load_account_mut,
 };
 
 pub fn process_reveal_with_callback(
@@ -121,7 +125,7 @@ pub fn process_reveal_with_callback(
     let request_provider_bytes = request.provider;
     let callback_compute_unit_limit = request.compute_unit_limit;
 
-    if callback_compute_unit_limit != 0  && request.callback_status == CALLBACK_NOT_STARTED {
+    if callback_compute_unit_limit != 0 && request.callback_status == CALLBACK_NOT_STARTED {
         let callback_ix = build_callback_ix(
             callback_program.key,
             entropy_signer_account.key,
@@ -151,8 +155,7 @@ pub fn process_reveal_with_callback(
         }
     }
 
-    if payer_account.key != &Pubkey::new_from_array(request.payer) || !payer_account.is_writable
-    {
+    if payer_account.key != &Pubkey::new_from_array(request.payer) || !payer_account.is_writable {
         return Err(EntropyError::InvalidAccount.into());
     }
 
@@ -225,13 +228,15 @@ fn build_callback_ix(
         is_signer: true,
         is_writable: false,
     });
-    metas.extend(callback_accounts
-        .iter()
-        .map(|info| solana_program::instruction::AccountMeta {
-            pubkey: *info.key,
-            is_signer: info.is_signer,
-            is_writable: info.is_writable,
-        }));
+    metas.extend(
+        callback_accounts
+            .iter()
+            .map(|info| solana_program::instruction::AccountMeta {
+                pubkey: *info.key,
+                is_signer: info.is_signer,
+                is_writable: info.is_writable,
+            }),
+    );
 
     Ok(solana_program::instruction::Instruction {
         program_id: *program_id,

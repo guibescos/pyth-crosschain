@@ -142,7 +142,8 @@ pub fn process_request_with_callback(
         if args.callback_ix_data.len() > CALLBACK_IX_DATA_LEN {
             return Err(EntropyError::InvalidAccount.into());
         }
-        request.callback_ix_data[..args.callback_ix_data.len()].copy_from_slice(&args.callback_ix_data);
+        request.callback_ix_data[..args.callback_ix_data.len()]
+            .copy_from_slice(&args.callback_ix_data);
     }
 
     set_return_data(&sequence_number.to_le_bytes());

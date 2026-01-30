@@ -6,7 +6,8 @@ mod reveal_with_callback;
 use solana_program::{account_info::AccountInfo, entrypoint::ProgramResult, pubkey::Pubkey};
 
 use self::{
-    initialize::process_initialize, register_provider::process_register_provider,
+    initialize::process_initialize,
+    register_provider::process_register_provider,
     request::{process_request, process_request_with_callback},
     reveal_with_callback::process_reveal_with_callback,
 };

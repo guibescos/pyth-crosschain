@@ -3,7 +3,7 @@ use crate::constants::{
 };
 use crate::discriminator::{config_discriminator, provider_discriminator, request_discriminator};
 use bytemuck::{Pod, Zeroable};
-use solana_program::program_error::ProgramError;
+use pinocchio::error::ProgramError;
 
 pub type PubkeyBytes = [u8; 32];
 

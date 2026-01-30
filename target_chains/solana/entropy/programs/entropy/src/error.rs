@@ -25,8 +25,8 @@ pub enum EntropyError {
     InsufficientGas = 9,
 }
 
-impl From<EntropyError> for solana_program::program_error::ProgramError {
+impl From<EntropyError> for pinocchio::error::ProgramError {
     fn from(value: EntropyError) -> Self {
-        solana_program::program_error::ProgramError::Custom(value as u32)
+        pinocchio::error::ProgramError::Custom(value as u32)
     }
 }

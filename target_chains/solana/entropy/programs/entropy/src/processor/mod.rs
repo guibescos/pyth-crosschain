@@ -4,10 +4,8 @@ mod request;
 mod reveal_with_callback;
 
 use bytemuck::{try_from_bytes, Pod};
-use solana_program::{
-    account_info::AccountInfo, entrypoint::ProgramResult, program_error::ProgramError,
-    pubkey::Pubkey,
-};
+use pinocchio::{AccountView, Address, ProgramResult};
+use pinocchio::error::ProgramError;
 
 use self::{
     initialize::process_initialize,
@@ -16,6 +14,12 @@ use self::{
     reveal_with_callback::process_reveal_with_callback,
 };
 use crate::{error::EntropyError, instruction::EntropyInstruction};
+
+pub(crate) fn next_account_info<'a>(
+    iter: &mut core::slice::Iter<'a, AccountView>,
+) -> Result<&'a AccountView, ProgramError> {
+    iter.next().ok_or(ProgramError::NotEnoughAccountKeys)
+}
 
 pub(crate) fn parse_args<T: Pod>(data: &[u8]) -> Result<&T, ProgramError> {
     if data.len() != core::mem::size_of::<T>() {
@@ -26,8 +30,8 @@ pub(crate) fn parse_args<T: Pod>(data: &[u8]) -> Result<&T, ProgramError> {
 }
 
 pub fn process_instruction(
-    program_id: &Pubkey,
-    accounts: &[AccountInfo],
+    program_id: &Address,
+    accounts: &[AccountView],
     data: &[u8],
 ) -> ProgramResult {
     let (instruction, payload) = EntropyInstruction::parse(data)?;

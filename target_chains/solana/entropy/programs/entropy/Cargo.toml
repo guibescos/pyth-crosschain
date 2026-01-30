@@ -21,7 +21,10 @@ unexpected_cfgs = { level = "warn", check-cfg = [
 
 [dependencies]
 bytemuck = { workspace = true }
-solana-program = { workspace = true }
+pinocchio = { version = "0.10.1", features = ["cpi"] }
+pinocchio-system = "0.5.0"
+solana-address = { version = "2.0.0", features = ["curve25519"] }
+solana-sha256-hasher = "2.2.1"
 thiserror = "1.0.50"
 
 [dev-dependencies]

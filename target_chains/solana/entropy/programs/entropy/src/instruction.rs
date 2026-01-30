@@ -28,9 +28,9 @@ impl EntropyInstruction {
 
     pub fn parse(
         input: &[u8],
-    ) -> Result<(EntropyInstruction, &[u8]), solana_program::program_error::ProgramError> {
+    ) -> Result<(EntropyInstruction, &[u8]), pinocchio::error::ProgramError> {
         if input.len() < INSTRUCTION_DISCRIMINATOR_LEN {
-            return Err(solana_program::program_error::ProgramError::InvalidInstructionData);
+            return Err(pinocchio::error::ProgramError::InvalidInstructionData);
         }
         let mut discriminator_bytes = [0u8; INSTRUCTION_DISCRIMINATOR_LEN];
         discriminator_bytes.copy_from_slice(&input[..INSTRUCTION_DISCRIMINATOR_LEN]);
@@ -47,7 +47,7 @@ impl EntropyInstruction {
             7 => EntropyInstruction::UpdateProviderConfig,
             8 => EntropyInstruction::WithdrawProviderFees,
             9 => EntropyInstruction::Governance,
-            _ => return Err(solana_program::program_error::ProgramError::InvalidInstructionData),
+            _ => return Err(pinocchio::error::ProgramError::InvalidInstructionData),
         };
         Ok((instruction, payload))
     }

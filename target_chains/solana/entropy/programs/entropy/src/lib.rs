@@ -10,6 +10,7 @@ pub mod pda;
 pub mod pda_loader;
 pub mod processor;
 pub mod vault;
+pub mod system_instruction;
 
 pub use accounts::*;
 pub use constants::*;

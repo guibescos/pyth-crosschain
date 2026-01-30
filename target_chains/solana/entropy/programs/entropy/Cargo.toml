@@ -27,5 +27,5 @@ thiserror = "1.0.50"
 [dev-dependencies]
 solana-program-test = { workspace = true }
 solana-sdk = { workspace = true }
-simple-requester = { path = "../simple-requester" }
+simple-requester = { path = "../simple-requester", features = ["no-entrypoint"] }
 tokio = { workspace = true }

@@ -174,8 +174,7 @@ fn handle_request(args: RequestArgs) -> Result<()> {
     let requester_program_id = parse_pubkey(requester_program_id, "requester program id")?;
     let provider_id = parse_pubkey(&args.provider_id, "provider id")?;
 
-    let payer = read_keypair_file(&keypair_path)
-        .with_context(|| format!("Failed to read keypair: {}", keypair_path.display()))?;
+    let payer = read_keypair_file(&keypair_path).unwrap();
     let rpc_client =
         RpcClient::new_with_commitment(args.shared.rpc_url.clone(), commitment.clone());
 
@@ -190,7 +189,7 @@ fn handle_request(args: RequestArgs) -> Result<()> {
         ));
     }
     let provider_data: Provider = *try_from_bytes(&provider_account.data)
-        .with_context(|| "Invalid provider account data")?;
+        .unwrap();
     let provider_authority = Pubkey::new_from_array(provider_data.provider_authority);
 
     let (provider_vault, _) = provider_vault_pda(&entropy_program_id, &provider_authority);

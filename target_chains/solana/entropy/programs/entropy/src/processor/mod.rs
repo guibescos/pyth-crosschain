@@ -3,7 +3,11 @@ mod register_provider;
 mod request;
 mod reveal_with_callback;
 
-use solana_program::{account_info::AccountInfo, entrypoint::ProgramResult, pubkey::Pubkey};
+use bytemuck::{try_from_bytes, Pod};
+use solana_program::{
+    account_info::AccountInfo, entrypoint::ProgramResult, program_error::ProgramError,
+    pubkey::Pubkey,
+};
 
 use self::{
     initialize::process_initialize,
@@ -12,6 +16,14 @@ use self::{
     reveal_with_callback::process_reveal_with_callback,
 };
 use crate::{error::EntropyError, instruction::EntropyInstruction};
+
+pub(crate) fn parse_args<T: Pod>(data: &[u8]) -> Result<&T, ProgramError> {
+    if data.len() != core::mem::size_of::<T>() {
+        return Err(ProgramError::InvalidInstructionData);
+    }
+
+    try_from_bytes::<T>(data).map_err(|_| ProgramError::InvalidInstructionData)
+}
 
 pub fn process_instruction(
     program_id: &Pubkey,

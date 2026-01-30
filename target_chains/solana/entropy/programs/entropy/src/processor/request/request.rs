@@ -1,4 +1,3 @@
-use bytemuck::try_from_bytes;
 #[allow(deprecated)]
 use solana_program::{
     account_info::{next_account_info, AccountInfo},
@@ -16,6 +15,7 @@ use crate::{
     instruction::RequestArgs,
     pda::{config_pda, provider_pda, provider_vault_pda, pyth_fee_vault_pda},
     pda_loader::{load_account, load_account_mut},
+    processor::parse_args,
     processor::request::request_helper,
 };
 
@@ -24,7 +24,7 @@ pub fn process_request(
     accounts: &[AccountInfo],
     data: &[u8],
 ) -> ProgramResult {
-    let args = parse_request_args(data)?;
+    let args = parse_args::<RequestArgs>(data)?;
 
     if args.use_blockhash > 1 {
         return Err(ProgramError::InvalidInstructionData);
@@ -115,12 +115,4 @@ pub fn process_request(
     // Return the assigned sequence number for CPI callers.
     set_return_data(&sequence_number.to_le_bytes());
     Ok(())
-}
-
-fn parse_request_args(data: &[u8]) -> Result<&RequestArgs, ProgramError> {
-    if data.len() != core::mem::size_of::<RequestArgs>() {
-        return Err(ProgramError::InvalidInstructionData);
-    }
-
-    try_from_bytes::<RequestArgs>(data).map_err(|_| ProgramError::InvalidInstructionData)
 }

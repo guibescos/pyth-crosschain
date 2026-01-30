@@ -19,6 +19,7 @@ use crate::{
     instruction::RequestArgs,
     pda::{config_pda, provider_pda, provider_vault_pda, pyth_fee_vault_pda},
     pda_loader::{load_account, load_account_mut},
+    processor::parse_args,
     processor::request::request_helper,
 };
 
@@ -174,8 +175,7 @@ fn parse_request_with_callback_args<'a>(
     }
 
     let (header_bytes, rest) = data.split_at(core::mem::size_of::<RequestWithCallbackHeader>());
-    let header = try_from_bytes::<RequestWithCallbackHeader>(header_bytes)
-        .map_err(|_| ProgramError::InvalidInstructionData)?;
+    let header = parse_args::<RequestWithCallbackHeader>(header_bytes)?;
 
     let callback_accounts_len = header.callback_accounts_len as usize;
 

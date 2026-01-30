@@ -1,4 +1,3 @@
-use bytemuck::try_from_bytes;
 #[allow(deprecated)]
 use solana_program::{
     account_info::{next_account_info, AccountInfo},
@@ -16,6 +15,7 @@ use crate::{
     instruction::InitializeArgs,
     pda::{config_pda, pyth_fee_vault_pda},
     pda_loader::init_pda_mut,
+    processor::parse_args,
     vault::init_vault_pda,
 };
 
@@ -24,7 +24,7 @@ pub fn process_initialize(
     accounts: &[AccountInfo],
     data: &[u8],
 ) -> ProgramResult {
-    let args = parse_initialize_args(data)?;
+    let args = parse_args::<InitializeArgs>(data)?;
 
     if args.admin == [0u8; 32] || args.default_provider == [0u8; 32] {
         return Err(ProgramError::InvalidArgument);
@@ -85,12 +85,4 @@ pub fn process_initialize(
     };
 
     Ok(())
-}
-
-fn parse_initialize_args(data: &[u8]) -> Result<&InitializeArgs, ProgramError> {
-    if data.len() != core::mem::size_of::<InitializeArgs>() {
-        return Err(ProgramError::InvalidInstructionData);
-    }
-
-    try_from_bytes::<InitializeArgs>(data).map_err(|_| ProgramError::InvalidInstructionData)
 }

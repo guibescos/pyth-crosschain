@@ -1,4 +1,3 @@
-use bytemuck::try_from_bytes;
 #[allow(deprecated)]
 use solana_program::{
     account_info::{next_account_info, AccountInfo},
@@ -16,6 +15,7 @@ use crate::{
     instruction::RegisterProviderArgs,
     pda::{provider_pda, provider_vault_pda},
     pda_loader::{init_pda_mut, load_account_mut},
+    processor::parse_args,
     vault::init_vault_pda,
 };
 
@@ -24,7 +24,7 @@ pub fn process_register_provider(
     accounts: &[AccountInfo],
     data: &[u8],
 ) -> ProgramResult {
-    let args = parse_register_provider_args(data)?;
+    let args = parse_args::<RegisterProviderArgs>(data)?;
 
     if args.chain_length == 0 {
         return Err(ProgramError::InvalidArgument);
@@ -112,12 +112,4 @@ pub fn process_register_provider(
     provider.bump = provider_bump;
 
     Ok(())
-}
-
-fn parse_register_provider_args(data: &[u8]) -> Result<&RegisterProviderArgs, ProgramError> {
-    if data.len() != core::mem::size_of::<RegisterProviderArgs>() {
-        return Err(ProgramError::InvalidInstructionData);
-    }
-
-    try_from_bytes::<RegisterProviderArgs>(data).map_err(|_| ProgramError::InvalidInstructionData)
 }

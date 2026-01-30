@@ -262,7 +262,7 @@ fn build_reveal_with_callback_ix(
     accounts.push(AccountMeta::new_readonly(entropy_signer, false));
     accounts.push(AccountMeta::new_readonly(callback_program, false));
     accounts.push(AccountMeta::new_readonly(system_program::id(), false));
-    accounts.push(AccountMeta::new(payer, true));
+    accounts.push(AccountMeta::new(payer, false));
 
     for meta in callback_accounts {
         let key = Pubkey::new_from_array(meta.pubkey);
@@ -298,12 +298,13 @@ fn send_and_confirm(
         let sig = rpc_client.send_transaction_with_config(
             &transaction,
             RpcSendTransactionConfig {
-                skip_preflight: false,
+                skip_preflight: true,
                 preflight_commitment: Some(commitment.commitment),
                 ..RpcSendTransactionConfig::default()
             },
         );
 
+        sleep(Duration::from_secs(2));
         match sig {
             Ok(signature) => {
                 let confirmed = rpc_client
@@ -716,7 +717,7 @@ fn handle_provide(args: ProvideArgs) -> Result<()> {
                     provider_account,
                     entropy_signer,
                     callback_program,
-                    payer.pubkey(),
+                    Pubkey::new_from_array(request.payer),
                     callback_accounts,
                     reveal_args,
                 );
@@ -868,7 +869,8 @@ fn handle_request(args: RequestArgs) -> Result<()> {
             commitment,
             RpcSendTransactionConfig {
                 skip_preflight: false,
-                ..Default::default()
+                preflight_commitment: Some(commitment.commitment),
+                ..RpcSendTransactionConfig::default()
             },
         )
         .context("Request transaction failed")?;

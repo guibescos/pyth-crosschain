@@ -232,7 +232,7 @@ fn process_callback(
     let provider = data[40..72]
         .try_into()
         .map_err(|_| ProgramError::InvalidInstructionData)?;
-    let random_number = data[72..104]
+    let random_number:[u8; 32] = data[72..104]
         .try_into()
         .map_err(|_| ProgramError::InvalidInstructionData)?;
 

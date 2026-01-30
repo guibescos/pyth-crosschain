@@ -9,6 +9,6 @@ description = "Simple requester program for Entropy tests"
 crate-type = ["lib"]
 
 [dependencies]
-bytemuck = { version = "1.13.1", features = ["derive"] }
-entropy = { path = "../entropy" }
-solana-program = "2.3.0"
+bytemuck = { workspace = true }
+entropy = { workspace = true }
+solana-program = { workspace = true }

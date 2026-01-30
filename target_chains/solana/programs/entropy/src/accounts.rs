@@ -93,8 +93,8 @@ impl Account for Provider {
 #[repr(C)]
 pub struct CallbackMeta {
     pub pubkey: PubkeyBytes,
-    pub is_signer: u8,
-    pub is_writable: u8,
+    pub is_signer: u16,
+    pub is_writable: u16,
 }
 
 impl CallbackMeta {

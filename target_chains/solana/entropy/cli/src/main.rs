@@ -285,46 +285,22 @@ fn send_and_confirm(
     payer: &Keypair,
     instructions: &[Instruction],
     commitment: CommitmentConfig,
-    label: &str,
 ) -> Result<Signature> {
-    let mut attempt = 0;
-    let mut backoff = Duration::from_millis(500);
-    loop {
-        attempt += 1;
-        let recent_blockhash = rpc_client.get_latest_blockhash()?;
-        let mut transaction = Transaction::new_with_payer(instructions, Some(&payer.pubkey()));
-        transaction.sign(&[payer], recent_blockhash);
+    let recent_blockhash = rpc_client.get_latest_blockhash()?;
+    let mut transaction = Transaction::new_with_payer(instructions, Some(&payer.pubkey()));
+    transaction.sign(&[payer], recent_blockhash);
 
-        let sig = rpc_client.send_transaction_with_config(
+    rpc_client
+        .send_and_confirm_transaction_with_spinner_and_config(
             &transaction,
+            commitment,
             RpcSendTransactionConfig {
-                skip_preflight: true,
+                skip_preflight: false,
                 preflight_commitment: Some(commitment.commitment),
                 ..RpcSendTransactionConfig::default()
             },
-        );
-
-        sleep(Duration::from_secs(2));
-        match sig {
-            Ok(signature) => {
-                let confirmed = rpc_client
-                    .confirm_transaction_with_commitment(&signature, commitment)?
-                    .value;
-                if confirmed {
-                    return Ok(signature);
-                }
-            }
-            Err(err) => {
-                eprintln!("{} attempt {} failed: {err}", label, attempt);
-            }
-        }
-
-        if attempt >= 6 {
-            bail!("{} failed after {} attempts", label, attempt);
-        }
-        sleep(backoff);
-        backoff = std::cmp::min(backoff * 2, Duration::from_secs(8));
-    }
+        )
+        .context("Transaction failed")
 }
 
 fn build_register_args(commitment: [u8; 32], chain_length: u64) -> RegisterProviderArgs {
@@ -547,7 +523,7 @@ fn handle_provide(args: ProvideArgs) -> Result<()> {
             payer.pubkey(),
             0,
         );
-        send_and_confirm(&rpc_client, &payer, &[ix], commitment, "initialize")?;
+        send_and_confirm(&rpc_client, &payer, &[ix], commitment)?;
     } else {
         println!("Entropy config already initialized.");
     }
@@ -557,13 +533,7 @@ fn handle_provide(args: ProvideArgs) -> Result<()> {
     let register_args = build_register_args(commitment_value, chain_length);
     let register_ix = build_register_provider_ix(entropy_program_id, payer.pubkey(), register_args);
     println!("Registering provider...");
-    send_and_confirm(
-        &rpc_client,
-        &payer,
-        &[register_ix],
-        commitment,
-        "register provider",
-    )?;
+    send_and_confirm(&rpc_client, &payer, &[register_ix], commitment)?;
 
     let (provider_account, _) = provider_pda(&entropy_program_id, &payer.pubkey());
     let provider_data = rpc_client
@@ -653,11 +623,11 @@ fn handle_provide(args: ProvideArgs) -> Result<()> {
                 let request_data = match rpc_client.get_account_data(&observation.request_account)
                 {
                     Ok(data) => data,
-                    Err(err) => {
-                        eprintln!(
-                            "Failed to fetch request {}: {err}",
-                            observation.request_account
-                        );
+                    Err(_) => {
+                        // eprintln!(
+                        //     "Failed to fetch request {}: {err}",
+                        //     observation.request_account
+                        // );
                         continue;
                     }
                 };
@@ -727,16 +697,11 @@ fn handle_provide(args: ProvideArgs) -> Result<()> {
                     observation.request_account, request.sequence_number
                 );
 
-                match send_and_confirm(
-                    &rpc_client,
-                    &payer,
-                    &[reveal_ix],
-                    commitment,
-                    "reveal_with_callback",
-                ) {
-                    Ok(_) => {
+                match send_and_confirm(&rpc_client, &payer, &[reveal_ix], commitment) {
+                    Ok(signature) => {
                         provider_chain.current_index -= num_hashes_usize;
                         provider_chain.current_sequence = request.sequence_number;
+                        println!("Successful reveal!: {signature}");
                     }
                     Err(err) => {
                         eprintln!("Failed to reveal: {err}");

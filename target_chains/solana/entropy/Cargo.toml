@@ -1,0 +1,3 @@
+[workspace]
+members = ["programs/entropy"]
+resolver = "2"

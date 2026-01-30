@@ -3,7 +3,6 @@ members = ["programs/*", "cli/", "program_simulator/", "common_test_utils"]
 
 exclude = [
     "programs/pyth-price-store",
-    "programs/entropy",
     "pyth_solana_receiver_sdk",
 ] # pyth_solana_receiver_sdk is excluded because it uses a later anchor-lang version than the contract
 

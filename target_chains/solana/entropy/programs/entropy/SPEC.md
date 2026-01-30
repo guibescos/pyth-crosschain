@@ -1,7 +1,7 @@
 # Entropy Solana Program Mapping Spec
 
 This document maps the Ethereum Entropy contract to a Solana program design. It is intended to guide the
-Pinocchio implementation in `target_chains/solana/programs/entropy` and the Mollusk tests.
+Pinocchio implementation in `target_chains/solana/entropy/programs/entropy` and the Mollusk tests.
 
 Ethereum reference sources:
 - `target_chains/ethereum/contracts/contracts/entropy/Entropy.sol`

@@ -98,7 +98,7 @@ pub fn process_reveal_with_callback(
     }
 
     let requester_program_id = Pubkey::new_from_array(request.requester_program_id);
-    if requester_program_id != Pubkey::default() && callback_program.key != &requester_program_id {
+    if callback_program.key != &requester_program_id {
         return Err(EntropyError::InvalidAccount.into());
     }
 

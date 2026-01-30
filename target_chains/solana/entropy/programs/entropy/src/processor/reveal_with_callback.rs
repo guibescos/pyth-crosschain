@@ -1,4 +1,3 @@
-use bytemuck::try_from_bytes;
 #[allow(deprecated)]
 use solana_program::{
     account_info::{next_account_info, AccountInfo},
@@ -20,6 +19,7 @@ use crate::{
     load_account,
     pda::{entropy_signer_pda, provider_pda},
     pda_loader::load_account_mut,
+    processor::parse_args,
 };
 
 pub fn process_reveal_with_callback(
@@ -27,7 +27,7 @@ pub fn process_reveal_with_callback(
     accounts: &[AccountInfo],
     data: &[u8],
 ) -> ProgramResult {
-    let args = parse_reveal_args(data)?;
+    let args = parse_args::<RevealArgs>(data)?;
 
     let mut account_info_iter = accounts.iter();
     let request_account = next_account_info(&mut account_info_iter)?;
@@ -165,12 +165,6 @@ pub fn process_reveal_with_callback(
     Ok(())
 }
 
-fn parse_reveal_args(data: &[u8]) -> Result<&RevealArgs, ProgramError> {
-    if data.len() != core::mem::size_of::<RevealArgs>() {
-        return Err(ProgramError::InvalidInstructionData);
-    }
-    try_from_bytes::<RevealArgs>(data).map_err(|_| ProgramError::InvalidInstructionData)
-}
 
 fn hash_provider_commitment(
     mut provider_contribution: [u8; 32],

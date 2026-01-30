@@ -6,7 +6,7 @@ use std::{
     time::Duration,
 };
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result};
 use bs58::decode as bs58_decode;
 use bytemuck::{bytes_of, try_from_bytes};
 use clap::{Args, Parser, Subcommand, ValueEnum};
@@ -28,7 +28,7 @@ use solana_sdk::{
     pubkey::Pubkey,
     signature::{read_keypair_file, Keypair, Signature},
     signer::Signer,
-    system_program, sysvar::slot_hashes,
+    sysvar::slot_hashes,
     transaction::Transaction,
 };
 use solana_transaction_status::{
@@ -43,9 +43,10 @@ use entropy::{
 use simple_requester::{CALLBACK_ACTION, CALLBACK_STATE_LEN, REQUEST_WITH_CALLBACK_ACTION};
 use solana_sdk::{
     hash::Hash,
-    system_instruction,
 };
 
+#[allow(deprecated)]
+use solana_sdk::{system_instruction, system_program};
 const DEFAULT_CALLBACK_COMPUTE_UNITS: u32 = 200_000;
 
 #[repr(C)]

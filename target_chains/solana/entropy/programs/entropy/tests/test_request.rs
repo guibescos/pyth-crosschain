@@ -8,16 +8,13 @@ use {
         constants::{CALLBACK_NOT_NECESSARY, REQUESTER_SIGNER_SEED},
         discriminator::{provider_discriminator, request_discriminator},
         error::EntropyError,
-        instruction::{EntropyInstruction, RequestArgs},
+        instruction::RequestArgs,
         pda::{config_pda, provider_pda, provider_vault_pda, pyth_fee_vault_pda},
     },
+    simple_requester,
     solana_program::{
-        account_info::{next_account_info, AccountInfo},
-        entrypoint::ProgramResult,
         hash::hashv,
         instruction::{AccountMeta, Instruction},
-        program::invoke_signed,
-        program_error::ProgramError,
         pubkey::Pubkey,
         system_program,
     },
@@ -33,83 +30,6 @@ use {
         new_entropy_program_test, submit_tx, submit_tx_expect_err,
     },
 };
-
-mod requester_program {
-    use super::*;
-
-    pub fn process_instruction(
-        program_id: &Pubkey,
-        accounts: &[AccountInfo],
-        data: &[u8],
-    ) -> ProgramResult {
-        let args = try_from_bytes::<RequestArgs>(data)
-            .map_err(|_| ProgramError::InvalidInstructionData)?;
-
-        let mut account_info_iter = accounts.iter();
-        let requester_signer = next_account_info(&mut account_info_iter)?;
-        let payer = next_account_info(&mut account_info_iter)?;
-        let requester_program = next_account_info(&mut account_info_iter)?;
-        let request_account = next_account_info(&mut account_info_iter)?;
-        let provider_account = next_account_info(&mut account_info_iter)?;
-        let provider_vault = next_account_info(&mut account_info_iter)?;
-        let config_account = next_account_info(&mut account_info_iter)?;
-        let pyth_fee_vault = next_account_info(&mut account_info_iter)?;
-        let system_program_account = next_account_info(&mut account_info_iter)?;
-        let entropy_program = next_account_info(&mut account_info_iter)?;
-
-        if requester_program.key != program_id {
-            return Err(ProgramError::InvalidArgument);
-        }
-
-        let mut entropy_data = Vec::with_capacity(8 + core::mem::size_of::<RequestArgs>());
-        entropy_data.extend_from_slice(&EntropyInstruction::Request.discriminator());
-        entropy_data.extend_from_slice(bytes_of(args));
-
-        let entropy_ix = Instruction {
-            program_id: *entropy_program.key,
-            data: entropy_data,
-            accounts: vec![
-                AccountMeta::new_readonly(*requester_signer.key, true),
-                AccountMeta::new(*payer.key, true),
-                AccountMeta::new_readonly(*requester_program.key, false),
-                AccountMeta::new(*request_account.key, true),
-                AccountMeta::new(*provider_account.key, false),
-                AccountMeta::new(*provider_vault.key, false),
-                AccountMeta::new_readonly(*config_account.key, false),
-                AccountMeta::new(*pyth_fee_vault.key, false),
-                AccountMeta::new_readonly(*system_program_account.key, false),
-            ],
-        };
-
-        let (expected_signer, bump) = Pubkey::find_program_address(
-            &[REQUESTER_SIGNER_SEED, entropy_program.key.as_ref()],
-            program_id,
-        );
-        if requester_signer.key != &expected_signer {
-            return Err(ProgramError::InvalidSeeds);
-        }
-
-        let signer_seeds: &[&[u8]] =
-            &[REQUESTER_SIGNER_SEED, entropy_program.key.as_ref(), &[bump]];
-        invoke_signed(
-            &entropy_ix,
-            &[
-                requester_signer.clone(),
-                payer.clone(),
-                requester_program.clone(),
-                request_account.clone(),
-                provider_account.clone(),
-                provider_vault.clone(),
-                config_account.clone(),
-                pyth_fee_vault.clone(),
-                system_program_account.clone(),
-            ],
-            &[signer_seeds],
-        )?;
-
-        Ok(())
-    }
-}
 
 #[allow(clippy::too_many_arguments)]
 fn build_requester_request_ix(
@@ -175,7 +95,7 @@ fn new_program_test_with_requester(
     program_test.add_program(
         "entropy-requester",
         requester_program_id,
-        processor!(requester_program::process_instruction),
+        processor!(simple_requester::process_instruction),
     );
     program_test
 }

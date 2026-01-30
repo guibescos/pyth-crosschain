@@ -375,18 +375,11 @@ async fn test_reveal_with_callback_flow() {
     let user_randomness = [9u8; 32];
     let compute_unit_limit = 200_000;
 
-    let callback_accounts = [
-        CallbackMeta {
-            pubkey: entropy_signer.to_bytes(),
-            is_signer: 0,
-            is_writable: 0,
-        },
-        CallbackMeta {
-            pubkey: callback_state.pubkey().to_bytes(),
-            is_signer: 0,
-            is_writable: 1,
-        },
-    ];
+    let callback_accounts = [CallbackMeta {
+        pubkey: callback_state.pubkey().to_bytes(),
+        is_signer: 0,
+        is_writable: 1,
+    }];
 
     let mut callback_ix_data = Vec::with_capacity(1 + 32);
     callback_ix_data.push(CALLBACK_ACTION);
@@ -462,7 +455,6 @@ async fn test_reveal_with_callback_flow() {
             AccountMeta::new_readonly(requester_program_id, false),
             AccountMeta::new_readonly(system_program::id(), false),
             AccountMeta::new(payer.pubkey(), true),
-            AccountMeta::new_readonly(entropy_signer, false),
             AccountMeta::new(callback_state.pubkey(), false),
         ],
     };
